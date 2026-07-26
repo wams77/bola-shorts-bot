@@ -5,7 +5,7 @@ from moviepy import AudioFileClip, TextClip, CompositeVideoClip, VideoFileClip
 
 def download_background_video(video_url, output_filename="bg_video.mp4"):
     print("[1/4] Mengunduh video latar belakang stok...")
-    # Menambahkan User-Agent agar tidak diblokir (Error 403 Forbidden)
+    # Menambahkan User-Agent agar tidak diblokir oleh server (Mengatasi Error 403)
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
@@ -33,6 +33,7 @@ def generate_video(bg_video_path, audio_path, output_video="output.mp4"):
     duration = audio.duration
     
     bg_video = VideoFileClip(bg_video_path).subclipped(0, duration)
+    # Memastikan video beresolusi vertikal
     bg_video = bg_video.resized(height=1920)
     
     txt_content = "BOLA SHORTS\n\nTahukah Kamu?\nReal Madrid adalah rajanya Liga Champions dengan 15 trofi!"
@@ -60,7 +61,10 @@ if __name__ == "__main__":
     BG_VIDEO_URL = "https://assets.mixkit.co/videos/preview/mixkit-feet-of-a-soccer-player-controlling-a-ball-41584-large.mp4"
     script = "Tahukah kamu? Real Madrid dijuluki sebagai rajanya Liga Champions karena telah mengoleksi lima belas trofi bergengsi di Eropa. Luar biasa!"
     
-    bg_file = download_background_video(BG_VIDEO_URL)
-    audio_file = create_voiceover(script)
-    generate_video(bg_file, audio_file)
-    print("Selesai! File video 'output.mp4' siap.")
+    try:
+        bg_file = download_background_video(BG_VIDEO_URL)
+        audio_file = create_voiceover(script)
+        generate_video(bg_file, audio_file)
+        print("Selesai! File video 'output.mp4' siap.")
+    except Exception as e:
+        print(f"Terjadi kesalahan saat mengeksekusi bot: {e}")
