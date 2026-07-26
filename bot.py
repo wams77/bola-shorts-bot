@@ -5,7 +5,12 @@ from moviepy import AudioFileClip, TextClip, CompositeVideoClip, VideoFileClip
 
 def download_background_video(video_url, output_filename="bg_video.mp4"):
     print("[1/4] Mengunduh video latar belakang stok...")
-    response = requests.get(video_url, stream=True)
+    # Menambahkan User-Agent agar tidak diblokir (Error 403 Forbidden)
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    response = requests.get(video_url, headers=headers, stream=True)
+    
     if response.status_code == 200:
         with open(output_filename, 'wb') as f:
             for chunk in response.iter_content(chunk_size=1024):
@@ -52,7 +57,6 @@ def generate_video(bg_video_path, audio_path, output_video="output.mp4"):
     print(f"[4/4] Video berhasil dibuat: {output_video}")
 
 if __name__ == "__main__":
-    # Menggunakan URL langsung file video latar belakang sepak bola berlisensi bebas (Stok)
     BG_VIDEO_URL = "https://assets.mixkit.co/videos/preview/mixkit-feet-of-a-soccer-player-controlling-a-ball-41584-large.mp4"
     script = "Tahukah kamu? Real Madrid dijuluki sebagai rajanya Liga Champions karena telah mengoleksi lima belas trofi bergengsi di Eropa. Luar biasa!"
     
