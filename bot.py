@@ -1,5 +1,4 @@
 import os
-import time
 from gtts import gTTS
 import yt_dlp
 from moviepy import AudioFileClip, TextClip, CompositeVideoClip, VideoFileClip
@@ -7,19 +6,30 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# --- 1. MENGUNDUH SUMBER VIDEO (Dengan Cookies Anti-Blokir) ---
-def download_background_video(youtube_url, output_filename="bg_video.mp4"):
-    print("[1/4] Mengunduh video latar belakang dari YouTube...")
+# --- 1. MENCARI DAN MENGUNDUH VIDEO HOT TERBARU ---
+def search_and_download_hot_video(query="berita bola terbaru hari ini shorts", output_filename="bg_video.mp4"):
+    print(f"[1/4] Mencari video di YouTube dengan kata kunci: '{query}'...")
     ydl_opts = {
-        'format': 'bestvideo[height<=1920][ext=mp4]+bestaudio[ext=m4a]/best[height<=1920][ext=mp4]',
+        # Format dibuat sangat fleksibel untuk menghindari error "Format not available"
+        'format': 'best[ext=mp4]/best',
         'outtmpl': output_filename,
-        'cookiefile': 'cookies.txt', # Menggunakan cookies dari GitHub Secrets
+        'cookiefile': 'cookies.txt', # Menggunakan cookies untuk lolos deteksi bot
         'noplaylist': True,
-        'max_filesize': 50000000,
+        'max_filesize': 50000000, # Batas ukuran 50MB
     }
+    
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([youtube_url])
-    return output_filename
+        # Menggunakan ytsearch1: untuk mengambil 1 video teratas dari hasil pencarian
+        info = ydl.extract_info(f"ytsearch1:{query}", download=True)
+        
+        # Mengekstrak judul asli video yang ditemukan untuk referensi
+        if 'entries' in info and len(info['entries']) > 0:
+            video_title = info['entries'][0]['title']
+        else:
+            video_title = info.get('title', 'Video Sepak Bola Terbaru')
+            
+    print(f"[1/4] Berhasil mengunduh video: {video_title}")
+    return output_filename, video_title
 
 # --- 2. MEMBUAT SUARA (TTS) ---
 def create_voiceover(text, output_audio="voiceover.mp3"):
@@ -34,12 +44,17 @@ def generate_video(bg_video_path, audio_path, output_video="output.mp4"):
     audio = AudioFileClip(audio_path)
     duration = audio.duration
     
-    bg_video = VideoFileClip(bg_video_path).subclipped(0, duration)
+    # Load video, potong sesuai durasi suara, matikan suara asli dari video sumber
+    bg_video = VideoFileClip(bg_video_path).subclipped(0, duration).without_audio()
+    
+    # Paksa ubah ukuran (resize) menjadi rasio Shorts vertikal (1080x1920)
     bg_video = bg_video.resized(height=1920)
+    # Jika lebarnya lebih/kurang dari 1080, crop bagian tengah agar pas 9:16
+    bg_video = bg_video.cropped(x_center=bg_video.w/2, y_center=bg_video.h/2, width=1080, height=1920)
     
     txt_clip = TextClip(
-        text="FAKTA SEPAK BOLA!\n\nReal Madrid adalah rajanya\nLiga Champions dengan 15 trofi!", 
-        font_size=60, 
+        text="KABAR BOLA HARI INI!\n\nTonton sampai habis!", 
+        font_size=70, 
         color='white', 
         size=(900, None),
         method='caption',
@@ -53,8 +68,6 @@ def generate_video(bg_video_path, audio_path, output_video="output.mp4"):
 # --- 4. AUTO-UPLOAD KE YOUTUBE ---
 def upload_to_youtube(video_path, title, description, tags):
     print("[4/4] Mengunggah ke YouTube...")
-    
-    # Membangun kredensial dari GitHub Secrets
     creds = Credentials(
         token=None,
         refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"),
@@ -64,16 +77,15 @@ def upload_to_youtube(video_path, title, description, tags):
     )
     
     youtube = build('youtube', 'v3', credentials=creds)
-    
     body = {
         "snippet": {
             "title": title,
             "description": description,
             "tags": tags,
-            "categoryId": "17" # Kategori: Olahraga
+            "categoryId": "17" 
         },
         "status": {
-            "privacyStatus": "public", # Ubah ke 'private' jika ingin ditinjau dulu
+            "privacyStatus": "public",
             "selfDeclaredMadeForKids": False
         }
     }
@@ -84,19 +96,29 @@ def upload_to_youtube(video_path, title, description, tags):
     print(f"✅ Video berhasil diunggah! Link: https://youtu.be/{response['id']}")
 
 if __name__ == "__main__":
-    # Pengaturan Meta Data Konten
-    YOUTUBE_BG_URL = "https://www.youtube.com/watch?v=2Vv-BfVoq4g" # Ganti dengan video sumber Anda
-    NASKAH = "Tahukah kamu? Real Madrid dijuluki sebagai rajanya Liga Champions karena telah mengoleksi lima belas trofi bergengsi di Eropa. Luar biasa!"
-    JUDUL_VIDEO = "Fakta Gila Real Madrid di UCL 🏆 #shorts #sepakbola"
-    DESKRIPSI = "Fakta menarik seputar Real Madrid dan dominasinya di Liga Champions. \n\n#realmadrid #championsleague #sepakbola #football #shorts"
-    TAGS = ["sepakbola", "football", "real madrid", "champions league", "shorts", "berita bola"]
+    # 1. KATA KUNCI PENCARIAN VIDEO OTOMATIS
+    KATA_KUNCI = "berita bola hari ini shorts"
+    
+    # 2. NASKAH DAN METADATA
+    NASKAH = "Update berita sepak bola terbaru hari ini! Jangan lupa subscribe channel ini untuk kabar bola terpanas setiap harinya."
+    DESKRIPSI = "Kabar sepak bola paling hot hari ini! \n\n#sepakbola #beritabola #shorts #football"
+    TAGS = ["sepakbola", "berita bola", "bola terbaru", "shorts", "football highlights"]
     
     try:
-        bg_file = download_background_video(YOUTUBE_BG_URL)
+        # Menjalankan seluruh alur
+        bg_file, judul_asli = search_and_download_hot_video(KATA_KUNCI)
+        
+        # Menggunakan judul asli dari video yang sedang viral dengan tambahan tag Shorts
+        JUDUL_VIDEO = f"{judul_asli} 🔥 #shorts"
+        
+        # Batasi panjang judul maksimal 100 karakter untuk amannya (syarat YouTube)
+        if len(JUDUL_VIDEO) > 100:
+            JUDUL_VIDEO = JUDUL_VIDEO[:90] + " #shorts"
+            
         audio_file = create_voiceover(NASKAH)
         video_final = generate_video(bg_file, audio_file)
         
-        # Eksekusi unggah otomatis ke channel Anda
+        # Unggah
         upload_to_youtube(video_final, JUDUL_VIDEO, DESKRIPSI, TAGS)
         
     except Exception as e:
