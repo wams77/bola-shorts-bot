@@ -1,18 +1,19 @@
 import os
+import requests
 from gtts import gTTS
-import yt_dlp
 from moviepy import AudioFileClip, TextClip, CompositeVideoClip, VideoFileClip
 
-def download_background_video(youtube_url, output_filename="bg_video.mp4"):
-    print("[1/4] Mengunduh video latar belakang dari YouTube...")
-    ydl_opts = {
-        'format': 'bestvideo[height<=1920][ext=mp4]+bestaudio[ext=m4a]/best[height<=1920][ext=mp4]',
-        'outtmpl': output_filename,
-        'noplaylist': True,
-        'max_filesize': 50000000,
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([youtube_url])
+def download_background_video(video_url, output_filename="bg_video.mp4"):
+    print("[1/4] Mengunduh video latar belakang stok...")
+    response = requests.get(video_url, stream=True)
+    if response.status_code == 200:
+        with open(output_filename, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=1024):
+                if chunk:
+                    f.write(chunk)
+        print("[1/4] Unduhan video berhasil.")
+    else:
+        raise Exception(f"Gagal mengunduh video, status code: {response.status_code}")
     return output_filename
 
 def create_voiceover(text, output_audio="voiceover.mp3"):
@@ -51,11 +52,11 @@ def generate_video(bg_video_path, audio_path, output_video="output.mp4"):
     print(f"[4/4] Video berhasil dibuat: {output_video}")
 
 if __name__ == "__main__":
-    # Menggunakan link video stok/latar belakang sepak bola yang aktif
-    YOUTUBE_BG_URL = "https://www.youtube.com/watch?v=2Vv-BfVoq4g"
+    # Menggunakan URL langsung file video latar belakang sepak bola berlisensi bebas (Stok)
+    BG_VIDEO_URL = "https://assets.mixkit.co/videos/preview/mixkit-feet-of-a-soccer-player-controlling-a-ball-41584-large.mp4"
     script = "Tahukah kamu? Real Madrid dijuluki sebagai rajanya Liga Champions karena telah mengoleksi lima belas trofi bergengsi di Eropa. Luar biasa!"
     
-    bg_file = download_background_video(YOUTUBE_BG_URL)
+    bg_file = download_background_video(BG_VIDEO_URL)
     audio_file = create_voiceover(script)
     generate_video(bg_file, audio_file)
     print("Selesai! File video 'output.mp4' siap.")
