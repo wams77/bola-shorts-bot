@@ -6,21 +6,22 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# --- 1. MENGUNDUH VIDEO TERBARU DARI VK VIDEO ---
-def download_vk_video(vk_url, output_filename="bg_video.mp4"):
-    print(f"[1/4] Mengambil video terbaru dari VK: '{vk_url}'...")
+# --- 1. MENGUNDUH VIDEO TERBARU DARI VK BERDASARKAN PENCARIAN ---
+def download_vk_video(query="football highlights", output_filename="bg_video.mp4"):
+    print(f"[1/4] Mencari dan mengambil video terbaru dari VK dengan kata kunci: '{query}'...")
     ydl_opts = {
         'format': 'best[ext=mp4]/best',
         'outtmpl': output_filename,
-        'noplaylist': False, 
-        'playlist_items': '1', # Ambil video paling atas/terbaru
+        'noplaylist': True,
         'max_filesize': 50000000, # Batas ukuran 50MB
     }
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(vk_url, download=True)
+        # Menggunakan fitur pencarian built-in yt-dlp untuk VK
+        search_url = f"vksearch1:{query}"
+        info = ydl.extract_info(search_url, download=True)
         
-        # Mengekstrak judul asli video dari VK
+        # Mengekstrak judul asli video
         if 'entries' in info and len(info['entries']) > 0:
             video_title = info['entries'][0].get('title', 'Video Sepak Bola Terbaru')
         else:
@@ -93,8 +94,8 @@ def upload_to_youtube(video_path, title, description, tags):
     print(f"✅ Video berhasil diunggah! Link: https://youtu.be/{response['id']}")
 
 if __name__ == "__main__":
-    # 1. SUMBER LINK VK VIDEO
-    VK_URL = "https://vksport.vkvideo.ru/sport/football"
+    # 1. KATA KUNCI PENCARIAN DI VK VIDEO
+    VK_QUERY = "football match goal"
     
     # 2. NASKAH DAN METADATA
     NASKAH = "Update berita sepak bola terbaru hari ini! Jangan lupa subscribe channel ini untuk kabar bola terpanas setiap harinya."
@@ -102,11 +103,11 @@ if __name__ == "__main__":
     TAGS = ["sepakbola", "berita bola", "bola terbaru", "shorts", "football highlights"]
     
     try:
-        # Mengambil video dari VK
-        bg_file, judul_asli = download_vk_video(VK_URL)
+        # Mengambil video dari VK menggunakan sistem pencarian
+        bg_file, judul_asli = download_vk_video(VK_QUERY)
         
         # Menyesuaikan judul video
-        JUDUL_VIDEO = f"{judul_asli} 🔥 #shorts"
+        JUDUL_VIDEO = f"Highlight Sepak Bola 🔥 #shorts"
         if len(JUDUL_VIDEO) > 100:
             JUDUL_VIDEO = JUDUL_VIDEO[:90] + " #shorts"
             
