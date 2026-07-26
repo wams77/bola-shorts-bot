@@ -2,8 +2,8 @@ name: Auto Football Shorts Bot
 
 on:
   schedule:
-    - cron: '0 7 * * *' # Berjalan otomatis setiap hari pukul 14.00 WIB
-  workflow_dispatch: # Memungkinkan tombol run manual
+    - cron: '0 7 * * *'
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -15,7 +15,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
+
+      - name: Install Deno (JavaScript Runtime untuk yt-dlp)
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
 
       - name: Install Dependencies
         run: |
