@@ -12,14 +12,16 @@ def search_and_download_hot_video(query="berita bola terbaru hari ini shorts", o
     ydl_opts = {
         'format': 'best[ext=mp4]/best',
         'outtmpl': output_filename,
-        'cookiefile': 'cookies.txt', # Menggunakan cookies dari GitHub Secrets
-        'noplaylist': True,
-        'max_filesize': 50000000, # Batas ukuran 50MB
         
-        # --- PENYAMARAN SEBAGAI APLIKASI ANDROID ---
-        # Ini akan mem-bypass proteksi JavaScript Web/TV dari YouTube
+        # MATIKAN COOKIES SEMENTARA untuk menghindari blokir IP Mismatch
+        # 'cookiefile': 'cookies.txt', 
+        
+        'noplaylist': True,
+        'max_filesize': 50000000,
+        
+        # PERBAIKAN PENYAMARAN: Paksa hanya menggunakan iOS/Android murni tanpa fallback 'web'
         'extractor_args': {
-            'youtube': ['player_client=android,web']
+            'youtube': ['player_client=ios,android']
         },
     }
     
