@@ -6,32 +6,23 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# --- 1. MENCARI DAN MENGUNDUH VIDEO HOT TERBARU ---
-def search_and_download_hot_video(query="berita bola terbaru hari ini shorts", output_filename="bg_video.mp4"):
-    print(f"[1/4] Mencari video di YouTube dengan kata kunci: '{query}'...")
+# --- 1. MENGUNDUH VIDEO TERBARU DARI VK VIDEO ---
+def download_vk_video(vk_url, output_filename="bg_video.mp4"):
+    print(f"[1/4] Mengambil video terbaru dari VK: '{vk_url}'...")
     ydl_opts = {
         'format': 'best[ext=mp4]/best',
         'outtmpl': output_filename,
-        
-        # MATIKAN COOKIES SEMENTARA untuk menghindari blokir IP Mismatch
-        # 'cookiefile': 'cookies.txt', 
-        
-        'noplaylist': True,
-        'max_filesize': 50000000,
-        
-        # PERBAIKAN PENYAMARAN: Paksa hanya menggunakan iOS/Android murni tanpa fallback 'web'
-        'extractor_args': {
-            'youtube': ['player_client=ios,android']
-        },
+        'noplaylist': False, 
+        'playlist_items': '1', # Ambil video paling atas/terbaru
+        'max_filesize': 50000000, # Batas ukuran 50MB
     }
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        # Menggunakan ytsearch1: untuk mengambil 1 video teratas dari hasil pencarian
-        info = ydl.extract_info(f"ytsearch1:{query}", download=True)
+        info = ydl.extract_info(vk_url, download=True)
         
-        # Mengekstrak judul asli video yang ditemukan untuk referensi
+        # Mengekstrak judul asli video dari VK
         if 'entries' in info and len(info['entries']) > 0:
-            video_title = info['entries'][0]['title']
+            video_title = info['entries'][0].get('title', 'Video Sepak Bola Terbaru')
         else:
             video_title = info.get('title', 'Video Sepak Bola Terbaru')
             
@@ -51,12 +42,11 @@ def generate_video(bg_video_path, audio_path, output_video="output.mp4"):
     audio = AudioFileClip(audio_path)
     duration = audio.duration
     
-    # Load video, potong sesuai durasi suara, matikan suara asli dari video sumber
+    # Load video, potong sesuai durasi suara, matikan suara asli
     bg_video = VideoFileClip(bg_video_path).subclipped(0, duration).without_audio()
     
-    # Paksa ubah ukuran (resize) menjadi rasio Shorts vertikal (1080x1920)
+    # Paksa ubah ukuran (resize) menjadi rasio Shorts vertikal (1080x1920) & crop tengah
     bg_video = bg_video.resized(height=1920)
-    # Jika lebarnya lebih/kurang dari 1080, crop bagian tengah agar pas 9:16
     bg_video = bg_video.cropped(x_center=bg_video.w/2, y_center=bg_video.h/2, width=1080, height=1920)
     
     txt_clip = TextClip(
@@ -75,8 +65,6 @@ def generate_video(bg_video_path, audio_path, output_video="output.mp4"):
 # --- 4. AUTO-UPLOAD KE YOUTUBE ---
 def upload_to_youtube(video_path, title, description, tags):
     print("[4/4] Mengunggah ke YouTube...")
-    
-    # Membangun kredensial dari environment GitHub Actions
     creds = Credentials(
         token=None,
         refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"),
@@ -91,10 +79,10 @@ def upload_to_youtube(video_path, title, description, tags):
             "title": title,
             "description": description,
             "tags": tags,
-            "categoryId": "17" # Kategori: Olahraga
+            "categoryId": "17" # Kategori Olahraga
         },
         "status": {
-            "privacyStatus": "public", # Video akan langsung diunggah secara publik
+            "privacyStatus": "public",
             "selfDeclaredMadeForKids": False
         }
     }
@@ -105,8 +93,8 @@ def upload_to_youtube(video_path, title, description, tags):
     print(f"✅ Video berhasil diunggah! Link: https://youtu.be/{response['id']}")
 
 if __name__ == "__main__":
-    # 1. KATA KUNCI PENCARIAN VIDEO OTOMATIS
-    KATA_KUNCI = "berita bola hari ini shorts"
+    # 1. SUMBER LINK VK VIDEO
+    VK_URL = "https://vksport.vkvideo.ru/sport/football"
     
     # 2. NASKAH DAN METADATA
     NASKAH = "Update berita sepak bola terbaru hari ini! Jangan lupa subscribe channel ini untuk kabar bola terpanas setiap harinya."
@@ -114,20 +102,17 @@ if __name__ == "__main__":
     TAGS = ["sepakbola", "berita bola", "bola terbaru", "shorts", "football highlights"]
     
     try:
-        # Menjalankan seluruh alur
-        bg_file, judul_asli = search_and_download_hot_video(KATA_KUNCI)
+        # Mengambil video dari VK
+        bg_file, judul_asli = download_vk_video(VK_URL)
         
-        # Menggunakan judul asli dari video yang sedang viral dengan tambahan tag Shorts
+        # Menyesuaikan judul video
         JUDUL_VIDEO = f"{judul_asli} 🔥 #shorts"
-        
-        # Batasi panjang judul maksimal 100 karakter untuk amannya (syarat YouTube)
         if len(JUDUL_VIDEO) > 100:
             JUDUL_VIDEO = JUDUL_VIDEO[:90] + " #shorts"
             
+        # Proses pembuatan dan pengunggahan
         audio_file = create_voiceover(NASKAH)
         video_final = generate_video(bg_file, audio_file)
-        
-        # Unggah ke YouTube
         upload_to_youtube(video_final, JUDUL_VIDEO, DESKRIPSI, TAGS)
         
     except Exception as e:
