@@ -2,8 +2,8 @@ name: Auto Football Shorts Bot
 
 on:
   schedule:
-    - cron: '0 7 * * *' # Berjalan otomatis setiap hari pukul 14.00 WIB / 15.00 WITA
-  workflow_dispatch: # Memungkinkan tombol run manual
+    - cron: '0 7 * * *'
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -17,17 +17,24 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Setup Deno (untuk yt-dlp)
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Buat File Cookies
+        # Menyalin isi token rahasia ke file lokal cookies.txt di server
+        run: echo "${{ secrets.YOUTUBE_COOKIES }}" > cookies.txt
+
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Bot Script
+      - name: Eksekusi Bot Utama
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
           python bot.py
-          
-      - name: Simpan Hasil Video (Artifacts)
-        uses: actions/upload-artifact@v4
-        with:
-          name: video-shorts-hasil
-          path: output.mp4
