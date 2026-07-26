@@ -10,12 +10,17 @@ from googleapiclient.http import MediaFileUpload
 def search_and_download_hot_video(query="berita bola terbaru hari ini shorts", output_filename="bg_video.mp4"):
     print(f"[1/4] Mencari video di YouTube dengan kata kunci: '{query}'...")
     ydl_opts = {
-        # Format dibuat sangat fleksibel untuk menghindari error "Format not available"
         'format': 'best[ext=mp4]/best',
         'outtmpl': output_filename,
-        'cookiefile': 'cookies.txt', # Menggunakan cookies untuk lolos deteksi bot
+        'cookiefile': 'cookies.txt', # Menggunakan cookies dari GitHub Secrets
         'noplaylist': True,
         'max_filesize': 50000000, # Batas ukuran 50MB
+        
+        # --- PENYAMARAN SEBAGAI APLIKASI ANDROID ---
+        # Ini akan mem-bypass proteksi JavaScript Web/TV dari YouTube
+        'extractor_args': {
+            'youtube': ['player_client=android,web']
+        },
     }
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -68,6 +73,8 @@ def generate_video(bg_video_path, audio_path, output_video="output.mp4"):
 # --- 4. AUTO-UPLOAD KE YOUTUBE ---
 def upload_to_youtube(video_path, title, description, tags):
     print("[4/4] Mengunggah ke YouTube...")
+    
+    # Membangun kredensial dari environment GitHub Actions
     creds = Credentials(
         token=None,
         refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"),
@@ -82,10 +89,10 @@ def upload_to_youtube(video_path, title, description, tags):
             "title": title,
             "description": description,
             "tags": tags,
-            "categoryId": "17" 
+            "categoryId": "17" # Kategori: Olahraga
         },
         "status": {
-            "privacyStatus": "public",
+            "privacyStatus": "public", # Video akan langsung diunggah secara publik
             "selfDeclaredMadeForKids": False
         }
     }
@@ -118,7 +125,7 @@ if __name__ == "__main__":
         audio_file = create_voiceover(NASKAH)
         video_final = generate_video(bg_file, audio_file)
         
-        # Unggah
+        # Unggah ke YouTube
         upload_to_youtube(video_final, JUDUL_VIDEO, DESKRIPSI, TAGS)
         
     except Exception as e:
