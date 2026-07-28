@@ -9,8 +9,11 @@ from googleapiclient.http import MediaFileUpload
 # --- 1. MENGUNDUH GAMBAR SEBAGAI LATAR BELAKANG ---
 def download_image(image_url, output_filename="bg_image.jpg"):
     print("[1/4] Mengunduh gambar latar belakang...")
-    # Menggunakan User-Agent standar agar bebas blokir
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    # Menggunakan User-Agent dan Accept header lengkap layaknya browser asli
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8'
+    }
     response = requests.get(image_url, headers=headers, stream=True)
     
     if response.status_code == 200:
@@ -89,8 +92,8 @@ def upload_to_youtube(video_path, title, description, tags):
     print(f"✅ Video berhasil diunggah! Link: https://youtu.be/{response['id']}")
 
 if __name__ == "__main__":
-    # 1. SUMBER GAMBAR SEPAK BOLA (Menggunakan gambar dari Wikimedia yang sangat stabil & bebas hak cipta)
-    IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Football_pitch_01.jpg/1024px-Football_pitch_01.jpg"
+    # 1. SUMBER GAMBAR SEPAK BOLA (Menggunakan Unsplash - Cepat, stabil, resolusi tinggi)
+    IMAGE_URL = "https://images.unsplash.com/photo-1574629810360-7efbb1925536?q=80&w=1080&auto=format&fit=crop"
     
     # 2. NASKAH DAN METADATA
     NASKAH = "Update berita sepak bola terbaru hari ini! Jangan lupa subscribe channel ini untuk kabar bola terpanas setiap harinya."
