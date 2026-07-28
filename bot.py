@@ -1,34 +1,26 @@
 import os
+import requests
 from gtts import gTTS
-import yt_dlp
-from moviepy import AudioFileClip, TextClip, CompositeVideoClip, VideoFileClip
+from moviepy import AudioFileClip, TextClip, CompositeVideoClip, ImageClip
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# --- 1. MENGUNDUH VIDEO TERBARU DARI VK BERDASARKAN PENCARIAN ---
-def download_vk_video(query="football highlights", output_filename="bg_video.mp4"):
-    print(f"[1/4] Mencari dan mengambil video terbaru dari VK dengan kata kunci: '{query}'...")
-    ydl_opts = {
-        'format': 'best[ext=mp4]/best',
-        'outtmpl': output_filename,
-        'noplaylist': True,
-        'max_filesize': 50000000, # Batas ukuran 50MB
-    }
+# --- 1. MENGUNDUH GAMBAR SEBAGAI LATAR BELAKANG ---
+def download_image(image_url, output_filename="bg_image.jpg"):
+    print("[1/4] Mengunduh gambar latar belakang...")
+    # Menggunakan User-Agent standar agar bebas blokir
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    response = requests.get(image_url, headers=headers, stream=True)
     
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        # Menggunakan fitur pencarian built-in yt-dlp untuk VK
-        search_url = f"vksearch1:{query}"
-        info = ydl.extract_info(search_url, download=True)
-        
-        # Mengekstrak judul asli video
-        if 'entries' in info and len(info['entries']) > 0:
-            video_title = info['entries'][0].get('title', 'Video Sepak Bola Terbaru')
-        else:
-            video_title = info.get('title', 'Video Sepak Bola Terbaru')
-            
-    print(f"[1/4] Berhasil mengunduh video: {video_title}")
-    return output_filename, video_title
+    if response.status_code == 200:
+        with open(output_filename, 'wb') as f:
+            for chunk in response.iter_content(1024):
+                f.write(chunk)
+        print("[1/4] Berhasil mengunduh gambar.")
+        return output_filename
+    else:
+        raise Exception(f"Gagal mengunduh gambar, status: {response.status_code}")
 
 # --- 2. MEMBUAT SUARA (TTS) ---
 def create_voiceover(text, output_audio="voiceover.mp3"):
@@ -37,18 +29,18 @@ def create_voiceover(text, output_audio="voiceover.mp3"):
     tts.save(output_audio)
     return output_audio
 
-# --- 3. MERAKIT VIDEO SHORTS ---
-def generate_video(bg_video_path, audio_path, output_video="output.mp4"):
+# --- 3. MERAKIT VIDEO SHORTS DARI GAMBAR ---
+def generate_video(bg_image_path, audio_path, output_video="output.mp4"):
     print("[3/4] Merakit video Shorts...")
     audio = AudioFileClip(audio_path)
     duration = audio.duration
     
-    # Load video, potong sesuai durasi suara, matikan suara asli
-    bg_video = VideoFileClip(bg_video_path).subclipped(0, duration).without_audio()
+    # Load gambar sebagai klip video dan sesuaikan durasinya dengan panjang suara
+    bg_image = ImageClip(bg_image_path).with_duration(duration)
     
     # Paksa ubah ukuran (resize) menjadi rasio Shorts vertikal (1080x1920) & crop tengah
-    bg_video = bg_video.resized(height=1920)
-    bg_video = bg_video.cropped(x_center=bg_video.w/2, y_center=bg_video.h/2, width=1080, height=1920)
+    bg_image = bg_image.resized(height=1920)
+    bg_image = bg_image.cropped(x_center=bg_image.w/2, y_center=bg_image.h/2, width=1080, height=1920)
     
     txt_clip = TextClip(
         text="KABAR BOLA HARI INI!\n\nTonton sampai habis!", 
@@ -59,7 +51,10 @@ def generate_video(bg_video_path, audio_path, output_video="output.mp4"):
         text_align='center'
     ).with_duration(duration).with_position('center')
     
-    video = CompositeVideoClip([bg_video, txt_clip]).with_audio(audio)
+    # Gabungkan gambar, teks, dan audio
+    video = CompositeVideoClip([bg_image, txt_clip]).with_audio(audio)
+    
+    # Render video akhir dengan frame rate standar
     video.write_videofile(output_video, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
     return output_video
 
@@ -94,26 +89,24 @@ def upload_to_youtube(video_path, title, description, tags):
     print(f"✅ Video berhasil diunggah! Link: https://youtu.be/{response['id']}")
 
 if __name__ == "__main__":
-    # 1. KATA KUNCI PENCARIAN DI VK VIDEO
-    VK_QUERY = "football match goal"
+    # 1. SUMBER GAMBAR SEPAK BOLA (Menggunakan gambar dari Wikimedia yang sangat stabil & bebas hak cipta)
+    IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Football_pitch_01.jpg/1024px-Football_pitch_01.jpg"
     
     # 2. NASKAH DAN METADATA
     NASKAH = "Update berita sepak bola terbaru hari ini! Jangan lupa subscribe channel ini untuk kabar bola terpanas setiap harinya."
+    JUDUL_VIDEO = "Highlight Sepak Bola 🔥 #shorts"
     DESKRIPSI = "Kabar sepak bola paling hot hari ini! \n\n#sepakbola #beritabola #shorts #football"
     TAGS = ["sepakbola", "berita bola", "bola terbaru", "shorts", "football highlights"]
     
     try:
-        # Mengambil video dari VK menggunakan sistem pencarian
-        bg_file, judul_asli = download_vk_video(VK_QUERY)
+        # Mengunduh gambar
+        bg_file = download_image(IMAGE_URL)
         
-        # Menyesuaikan judul video
-        JUDUL_VIDEO = f"Highlight Sepak Bola 🔥 #shorts"
-        if len(JUDUL_VIDEO) > 100:
-            JUDUL_VIDEO = JUDUL_VIDEO[:90] + " #shorts"
-            
-        # Proses pembuatan dan pengunggahan
+        # Membuat suara dan merakit video
         audio_file = create_voiceover(NASKAH)
         video_final = generate_video(bg_file, audio_file)
+        
+        # Unggah ke YouTube
         upload_to_youtube(video_final, JUDUL_VIDEO, DESKRIPSI, TAGS)
         
     except Exception as e:
