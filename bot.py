@@ -1,69 +1,104 @@
 import os
+import random
 import requests
-from gtts import gTTS
-from moviepy import AudioFileClip, TextClip, CompositeVideoClip, ImageClip
+import urllib.parse
+from moviepy import AudioFileClip, TextClip, CompositeVideoClip, ImageClip, ColorClip
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# --- 1. MENGUNDUH GAMBAR SEBAGAI LATAR BELAKANG ---
-def download_image(image_url, output_filename="bg_image.jpg"):
-    print("[1/4] Mengunduh gambar latar belakang...")
-    # Menggunakan User-Agent dan Accept header lengkap layaknya browser asli
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8'
+# --- KOLEKSI KEBIJAKSANAAN (FILSAFAT & MOTIVASI) ---
+KUOTES = [
+    {
+        "teks": "Jangan menunggu cahaya di ujung terowongan.\nJadilah cahaya itu sendiri.",
+        "prompt_gambar": "A glowing mystical lantern in a dark moody forest, cinematic lighting, epic fantasy, extremely detailed"
+    },
+    {
+        "teks": "Kesulitan yang kamu hadapi hari ini,\nadalah kekuatan yang kamu butuhkan untuk hari esok.",
+        "prompt_gambar": "A lone warrior standing on a mountain peak looking at a stormy sky, dark clouds, epic cinematic landscape"
+    },
+    {
+        "teks": "Bukan beban yang menghancurkanmu,\ntetapi cara kamu memikulnya.",
+        "prompt_gambar": "A beautiful serene lake reflecting giant towering mountains at twilight, deep blue and purple hues, peaceful"
+    },
+    {
+        "teks": "Waktu adalah kanvas.\nDan tindakanmu adalah lukisannya.\nJangan biarkan kanvasmu kosong.",
+        "prompt_gambar": "An ancient giant hourglass standing in a vast desert under a starry galaxy sky, surreal, highly detailed"
+    },
+    {
+        "teks": "Pohon yang besar tumbuh dari angin yang kencang.\nTeruslah berdiri kokoh.",
+        "prompt_gambar": "A massive ancient glowing tree in the middle of a dark stormy landscape, resilient, cinematic composition"
     }
-    response = requests.get(image_url, headers=headers, stream=True)
+]
+
+# --- 1. AI IMAGE GENERATOR ---
+def generate_ai_image(prompt, output_filename="bg_image.jpg"):
+    print(f"[1/4] Meminta AI melukis gambar: '{prompt}'...")
+    # Menambahkan instruksi agar gambar berformat vertikal dan gelap (agar teks putih terbaca)
+    full_prompt = f"{prompt}, dark moody atmosphere, vertical portrait, 8k resolution, masterpiece"
+    encoded_prompt = urllib.parse.quote(full_prompt)
     
+    # Menggunakan Pollinations AI (Gratis, tanpa API Key)
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1920&nologo=true"
+    
+    response = requests.get(image_url, stream=True)
     if response.status_code == 200:
         with open(output_filename, 'wb') as f:
             for chunk in response.iter_content(1024):
                 f.write(chunk)
-        print("[1/4] Berhasil mengunduh gambar.")
+        print("[1/4] Lukisan AI berhasil diciptakan.")
         return output_filename
     else:
-        raise Exception(f"Gagal mengunduh gambar, status: {response.status_code}")
+        raise Exception("Gagal menghasilkan gambar AI.")
 
-# --- 2. MEMBUAT SUARA (TTS) ---
-def create_voiceover(text, output_audio="voiceover.mp3"):
-    print("[2/4] Membuat suara (Voiceover)...")
-    tts = gTTS(text=text, lang="id", slow=False)
-    tts.save(output_audio)
-    return output_audio
-
-# --- 3. MERAKIT VIDEO SHORTS DARI GAMBAR ---
-def generate_video(bg_image_path, audio_path, output_video="output.mp4"):
-    print("[3/4] Merakit video Shorts...")
-    audio = AudioFileClip(audio_path)
-    duration = audio.duration
+# --- 2. AI NEURAL VOICE GENERATOR ---
+def generate_ai_voice(text, output_audio="voiceover.mp3"):
+    print("[2/4] Menyuarakan kebijaksanaan dengan AI Neural...")
+    # Menggunakan Edge-TTS (Suara Pria Indonesia: id-ID-ArdiNeural)
+    # Suara ini sangat natural, tenang, dan bijaksana.
+    command = f'edge-tts --voice id-ID-ArdiNeural --rate=-10% --text "{text}" --write-media {output_audio}'
+    os.system(command)
     
-    # Load gambar sebagai klip video dan sesuaikan durasinya dengan panjang suara
+    if os.path.exists(output_audio):
+        print("[2/4] Suara berhasil direkam.")
+        return output_audio
+    else:
+        raise Exception("Gagal menghasilkan suara AI.")
+
+# --- 3. EDITOR VIDEO OTOMATIS ---
+def generate_video(bg_image_path, audio_path, text, output_video="output.mp4"):
+    print("[3/4] Merakit visual dan audio menjadi mahakarya Shorts...")
+    audio = AudioFileClip(audio_path)
+    # Tambahkan sedikit jeda di akhir agar tidak terpotong tiba-tiba
+    duration = audio.duration + 1.5 
+    
+    # Memuat gambar AI
     bg_image = ImageClip(bg_image_path).with_duration(duration)
     
-    # Paksa ubah ukuran (resize) menjadi rasio Shorts vertikal (1080x1920) & crop tengah
-    bg_image = bg_image.resized(height=1920)
-    bg_image = bg_image.cropped(x_center=bg_image.w/2, y_center=bg_image.h/2, width=1080, height=1920)
+    # Membuat filter gelap transparan agar teks semakin menonjol
+    dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.4).with_duration(duration)
     
+    # Membuat Teks (Subtitle/Quotes)
     txt_clip = TextClip(
-        text="KABAR BOLA HARI INI!\n\nTonton sampai habis!", 
-        font_size=70, 
+        text=text, 
+        font_size=65, 
         color='white', 
         size=(900, None),
         method='caption',
         text_align='center'
     ).with_duration(duration).with_position('center')
     
-    # Gabungkan gambar, teks, dan audio
-    video = CompositeVideoClip([bg_image, txt_clip]).with_audio(audio)
+    # Menggabungkan semuanya: Gambar Asli -> Lapisan Gelap -> Teks -> Audio
+    video = CompositeVideoClip([bg_image, dark_overlay, txt_clip]).with_audio(audio)
     
-    # Render video akhir dengan frame rate standar
+    # Render akhir
     video.write_videofile(output_video, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
+    print(f"[3/4] Video mahakarya berhasil diselesaikan: {output_video}")
     return output_video
 
 # --- 4. AUTO-UPLOAD KE YOUTUBE ---
 def upload_to_youtube(video_path, title, description, tags):
-    print("[4/4] Mengunggah ke YouTube...")
+    print("[4/4] Mengunggah kebijaksanaan ke YouTube...")
     creds = Credentials(
         token=None,
         refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"),
@@ -78,7 +113,7 @@ def upload_to_youtube(video_path, title, description, tags):
             "title": title,
             "description": description,
             "tags": tags,
-            "categoryId": "17" # Kategori Olahraga
+            "categoryId": "27" # Kategori: Education / Motivasi
         },
         "status": {
             "privacyStatus": "public",
@@ -89,28 +124,27 @@ def upload_to_youtube(video_path, title, description, tags):
     media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
     request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
     response = request.execute()
-    print(f"✅ Video berhasil diunggah! Link: https://youtu.be/{response['id']}")
+    print(f"✅ Mahakarya berhasil dipublikasikan! Link: https://youtu.be/{response['id']}")
 
 if __name__ == "__main__":
-    # 1. SUMBER GAMBAR SEPAK BOLA (Menggunakan Unsplash - Cepat, stabil, resolusi tinggi)
-    IMAGE_URL = "https://images.unsplash.com/photo-1574629810360-7efbb1925536?q=80&w=1080&auto=format&fit=crop"
-    
-    # 2. NASKAH DAN METADATA
-    NASKAH = "Update berita sepak bola terbaru hari ini! Jangan lupa subscribe channel ini untuk kabar bola terpanas setiap harinya."
-    JUDUL_VIDEO = "Highlight Sepak Bola 🔥 #shorts"
-    DESKRIPSI = "Kabar sepak bola paling hot hari ini! \n\n#sepakbola #beritabola #shorts #football"
-    TAGS = ["sepakbola", "berita bola", "bola terbaru", "shorts", "football highlights"]
-    
     try:
-        # Mengunduh gambar
-        bg_file = download_image(IMAGE_URL)
+        # 1. Memilih kebijaksanaan hari ini secara acak
+        konten = random.choice(KUOTES)
+        naskah = konten["teks"]
+        prompt_gambar = konten["prompt_gambar"]
         
-        # Membuat suara dan merakit video
-        audio_file = create_voiceover(NASKAH)
-        video_final = generate_video(bg_file, audio_file)
+        # Metadata YouTube
+        JUDUL_VIDEO = "Renungan Hari Ini 💡 #shorts #motivasi"
+        DESKRIPSI = f"{naskah}\n\nTeruslah melangkah ke depan. Jangan lupa subscribe untuk asupan motivasi setiap hari.\n\n#motivasi #inspirasi #quotes #filsafat #pengembangandiri #shorts"
+        TAGS = ["motivasi", "inspirasi", "quotes bijak", "filsafat", "pengembangan diri", "kata mutiara", "shorts"]
         
-        # Unggah ke YouTube
+        # 2. Proses Penciptaan
+        bg_file = generate_ai_image(prompt_gambar)
+        audio_file = generate_ai_voice(naskah)
+        video_final = generate_video(bg_file, audio_file, naskah)
+        
+        # 3. Publikasi
         upload_to_youtube(video_final, JUDUL_VIDEO, DESKRIPSI, TAGS)
         
     except Exception as e:
-        print(f"❌ Terjadi kesalahan: {e}")
+        print(f"❌ Terjadi kesalahan dalam meditasi bot: {e}")
