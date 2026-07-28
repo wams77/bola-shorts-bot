@@ -1,4 +1,5 @@
 import os
+import time
 import random
 import requests
 import urllib.parse
@@ -7,98 +8,121 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# --- KOLEKSI KEBIJAKSANAAN (FILSAFAT & MOTIVASI) ---
-KUOTES = [
+# --- KOLEKSI NASKAH MOTIVASI VIRAL (DURASI > 15 DETIK) ---
+KONTEN_BATCH = [
     {
-        "teks": "Jangan menunggu cahaya di ujung terowongan.\nJadilah cahaya itu sendiri.",
-        "prompt_gambar": "A glowing mystical lantern in a dark moody forest, cinematic lighting, epic fantasy, extremely detailed"
+        "hook": "HENTIKAN SCROLLMU SEJENAK.",
+        "isi": "Jangan pernah takut berjalan lambat,\ntakutlah jika kamu hanya diam di tempat.\nLangkah kecil hari ini adalah awal dari kemenangan besar.",
+        "cta": "Ketik 'SAYA BISA' di komentar jika kamu siap berubah!",
+        "prompt_ai": "A lonely wanderer standing on a cliff edge looking at a surreal glowing galaxy, epic cinematic sunset, hyperrealistic 8k"
     },
     {
-        "teks": "Kesulitan yang kamu hadapi hari ini,\nadalah kekuatan yang kamu butuhkan untuk hari esok.",
-        "prompt_gambar": "A lone warrior standing on a mountain peak looking at a stormy sky, dark clouds, epic cinematic landscape"
+        "hook": "BACA INI SAAT KAMU LELAH.",
+        "isi": "Pohon yang paling kuat tumbuh dari angin yang paling kencang.\nUjian yang kamu hadapi saat ini sedang membentuk dirimu menjadi sosok yang tak terkalahkan.",
+        "cta": "Simpan video ini agar kamu ingat saat sedang turun!",
+        "prompt_ai": "A giant ancient resilient tree on top of a mountain during a thunder storm, dramatic lighting, masterpiece"
     },
     {
-        "teks": "Bukan beban yang menghancurkanmu,\ntetapi cara kamu memikulnya.",
-        "prompt_gambar": "A beautiful serene lake reflecting giant towering mountains at twilight, deep blue and purple hues, peaceful"
+        "hook": "RAHASIA ORANG SUKSES.",
+        "isi": "Rasa sakit karena kedisiplinan hanya menekanmu sebentar.\nNamun rasa sakit karena penyesalan akan menghantuimu seumur hidup.\nPilihlah perjuanganmu sekarang.",
+        "cta": "Ketik 'SIAP' untuk berkomitmen pada dirimu sendiri!",
+        "prompt_ai": "A dark moody gym or temple at dawn, golden sunlight piercing through smoke, inspiring cinematic aesthetic"
     },
     {
-        "teks": "Waktu adalah kanvas.\nDan tindakanmu adalah lukisannya.\nJangan biarkan kanvasmu kosong.",
-        "prompt_gambar": "An ancient giant hourglass standing in a vast desert under a starry galaxy sky, surreal, highly detailed"
+        "hook": "INGATLAH SATU HAL INI.",
+        "isi": "Kamu tidak bisa mengubah masa lalu yang telah berlalu.\nTapi kamu memegang kendali penuh atas cerita yang ingin kamu tuliskan esok hari.",
+        "cta": "Bagikan video ini ke orang yang sedang butuh semangat!",
+        "prompt_ai": "An open glowing magical book in an old mysterious library, floating dust particles, atmospheric lighting"
     },
     {
-        "teks": "Pohon yang besar tumbuh dari angin yang kencang.\nTeruslah berdiri kokoh.",
-        "prompt_gambar": "A massive ancient glowing tree in the middle of a dark stormy landscape, resilient, cinematic composition"
+        "hook": "PESAN UNTUK MASA DEPANMU.",
+        "isi": "Banyak orang gagal bukan karena kurang berpotensi,\ntetapi karena mereka berhenti tepat satu langkah sebelum berhasil.\nTeruslah melangkah.",
+        "cta": "Ketik 'PANTANG MENYERAH' jika kamu percaya pada prosesmu!",
+        "prompt_ai": "A futuristic glowing path towards a bright horizon, endless road in a scenic valley at twilight, hyperrealistic"
     }
 ]
 
-# --- 1. AI IMAGE GENERATOR ---
-def generate_ai_image(prompt, output_filename="bg_image.jpg"):
-    print(f"[1/4] Meminta AI melukis gambar: '{prompt}'...")
-    # Menambahkan instruksi agar gambar berformat vertikal dan gelap (agar teks putih terbaca)
-    full_prompt = f"{prompt}, dark moody atmosphere, vertical portrait, 8k resolution, masterpiece"
+# --- 1. AI IMAGE GENERATOR (Pollinations AI) ---
+def generate_ai_image(prompt, index, output_filename):
+    print(f"[{index}/5] 🎨 Meminta AI melukis gambar: '{prompt[:30]}...'")
+    full_prompt = f"{prompt}, dark moody aesthetic, vertical 9:16 portrait, cinematic lighting, ultra detailed, 8k"
     encoded_prompt = urllib.parse.quote(full_prompt)
+    seed = random.randint(1, 99999)
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1920&nologo=true&seed={seed}"
     
-    # Menggunakan Pollinations AI (Gratis, tanpa API Key)
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1920&nologo=true"
-    
-    response = requests.get(image_url, stream=True)
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    response = requests.get(image_url, headers=headers, stream=True)
     if response.status_code == 200:
         with open(output_filename, 'wb') as f:
             for chunk in response.iter_content(1024):
                 f.write(chunk)
-        print("[1/4] Lukisan AI berhasil diciptakan.")
         return output_filename
     else:
-        raise Exception("Gagal menghasilkan gambar AI.")
+        raise Exception(f"Gagal mengunduh gambar AI (Status: {response.status_code})")
 
-# --- 2. AI NEURAL VOICE GENERATOR ---
-def generate_ai_voice(text, output_audio="voiceover.mp3"):
-    print("[2/4] Menyuarakan kebijaksanaan dengan AI Neural...")
-    # Menggunakan Edge-TTS (Suara Pria Indonesia: id-ID-ArdiNeural)
-    # Suara ini sangat natural, tenang, dan bijaksana.
-    command = f'edge-tts --voice id-ID-ArdiNeural --rate=-10% --text "{text}" --write-media {output_audio}'
+# --- 2. AI NEURAL VOICE GENERATOR (Edge-TTS) ---
+def generate_ai_voice(full_text, index, output_audio):
+    print(f"[{index}/5] 🎙️ Menyuarakan naskah dengan Suara AI Neural...")
+    # Kecepatan dinaikkan sedikit (-5%) agar intonasi tegas dan tidak bosan
+    command = f'edge-tts --voice id-ID-ArdiNeural --rate=-5% --text "{full_text}" --write-media {output_audio}'
     os.system(command)
-    
     if os.path.exists(output_audio):
-        print("[2/4] Suara berhasil direkam.")
         return output_audio
     else:
-        raise Exception("Gagal menghasilkan suara AI.")
+        raise Exception("Gagal membuat suara AI.")
 
-# --- 3. EDITOR VIDEO OTOMATIS ---
-def generate_video(bg_image_path, audio_path, text, output_video="output.mp4"):
-    print("[3/4] Merakit visual dan audio menjadi mahakarya Shorts...")
+# --- 3. EDITOR VIDEO DENGAN LAYOUT TEKS PRESISI (SAFE ZONE) ---
+def render_short_video(bg_image_path, audio_path, hook_text, isi_text, cta_text, output_video, index):
+    print(f"[{index}/5] 🎬 Merakit video Shorts durasi monetisasi...")
+    
     audio = AudioFileClip(audio_path)
-    # Tambahkan sedikit jeda di akhir agar tidak terpotong tiba-tiba
-    duration = audio.duration + 1.5 
+    audio_duration = audio.duration
+    # Durasi video disesuaikan dengan suara + 1 detik jeda nyaman
+    video_duration = audio_duration + 1.0 
     
-    # Memuat gambar AI
-    bg_image = ImageClip(bg_image_path).with_duration(duration)
+    # 1. Background Gambar AI
+    bg_clip = ImageClip(bg_image_path).with_duration(video_duration)
+    bg_clip = bg_clip.resized(height=1920)
+    bg_clip = bg_clip.cropped(x_center=bg_clip.w/2, y_center=bg_clip.h/2, width=1080, height=1920)
     
-    # Membuat filter gelap transparan agar teks semakin menonjol
-    dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.4).with_duration(duration)
+    # 2. Dark Overlay Transparan (Agar Teks Mudah Dibaca)
+    overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.45).with_duration(video_duration)
     
-    # Membuat Teks (Subtitle/Quotes)
+    # Combined Text untuk Tampilan Utama
+    full_display_text = f"🔥 {hook_text} 🔥\n\n{isi_text}\n\n👇 {cta_text}"
+    
+    # 3. Teks Utama dengan Layout Safe Zone
     txt_clip = TextClip(
-        text=text, 
-        font_size=65, 
+        text=full_display_text, 
+        font_size=48, 
         color='white', 
-        size=(900, None),
+        size=(920, None),
         method='caption',
         text_align='center'
-    ).with_duration(duration).with_position('center')
+    ).with_duration(video_duration).with_position('center')
     
-    # Menggabungkan semuanya: Gambar Asli -> Lapisan Gelap -> Teks -> Audio
-    video = CompositeVideoClip([bg_image, dark_overlay, txt_clip]).with_audio(audio)
+    # 4. Kotak Latar Teks (Text Card Overlay) agar Teks Terbaca Jelas di HP Mana Pun
+    box_width = 980
+    box_height = txt_clip.h + 80
+    text_bg_box = ColorClip(size=(box_width, box_height), color=(15, 15, 20)).with_opacity(0.70).with_duration(video_duration).with_position('center')
     
-    # Render akhir
-    video.write_videofile(output_video, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
-    print(f"[3/4] Video mahakarya berhasil diselesaikan: {output_video}")
-    return output_video
+    # Merakit Seluruh Layer
+    video = CompositeVideoClip([bg_clip, overlay, text_bg_box, txt_clip]).with_audio(audio)
+    
+    # Render Video
+    video.write_videofile(
+        output_video, 
+        fps=24, 
+        codec="libx264", 
+        audio_codec="aac", 
+        preset="ultrafast"
+    )
+    print(f"[{index}/5] ✅ Video #{index} selesai dirender! Durasi: {video_duration:.1f} detik")
+    return output_video, video_duration
 
 # --- 4. AUTO-UPLOAD KE YOUTUBE ---
-def upload_to_youtube(video_path, title, description, tags):
-    print("[4/4] Mengunggah kebijaksanaan ke YouTube...")
+def upload_to_youtube(video_path, title, description, tags, index):
+    print(f"[{index}/5] 🚀 Mengunggah video #{index} ke YouTube...")
     creds = Credentials(
         token=None,
         refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"),
@@ -113,7 +137,7 @@ def upload_to_youtube(video_path, title, description, tags):
             "title": title,
             "description": description,
             "tags": tags,
-            "categoryId": "27" # Kategori: Education / Motivasi
+            "categoryId": "27" # Category: Education / Motivation
         },
         "status": {
             "privacyStatus": "public",
@@ -124,27 +148,62 @@ def upload_to_youtube(video_path, title, description, tags):
     media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
     request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
     response = request.execute()
-    print(f"✅ Mahakarya berhasil dipublikasikan! Link: https://youtu.be/{response['id']}")
+    print(f"[{index}/5] 🎉 BERHASIL UNGGAH! Link Video: https://youtu.be/{response['id']}\n")
 
+# --- EXECUTION MAIN LOOP (BATCH 5 VIDEOS) ---
 if __name__ == "__main__":
-    try:
-        # 1. Memilih kebijaksanaan hari ini secara acak
-        konten = random.choice(KUOTES)
-        naskah = konten["teks"]
-        prompt_gambar = konten["prompt_gambar"]
-        
-        # Metadata YouTube
-        JUDUL_VIDEO = "Renungan Hari Ini 💡 #shorts #motivasi"
-        DESKRIPSI = f"{naskah}\n\nTeruslah melangkah ke depan. Jangan lupa subscribe untuk asupan motivasi setiap hari.\n\n#motivasi #inspirasi #quotes #filsafat #pengembangandiri #shorts"
-        TAGS = ["motivasi", "inspirasi", "quotes bijak", "filsafat", "pengembangan diri", "kata mutiara", "shorts"]
-        
-        # 2. Proses Penciptaan
-        bg_file = generate_ai_image(prompt_gambar)
-        audio_file = generate_ai_voice(naskah)
-        video_final = generate_video(bg_file, audio_file, naskah)
-        
-        # 3. Publikasi
-        upload_to_youtube(video_final, JUDUL_VIDEO, DESKRIPSI, TAGS)
-        
-    except Exception as e:
-        print(f"❌ Terjadi kesalahan dalam meditasi bot: {e}")
+    print("==================================================")
+    print("⚡ MEMULAI PRODUKSI MASAL 5 VIDEO SHORTS MOTIVASI ⚡")
+    print("==================================================\n")
+    
+    # Mengambil 5 item dari koleksi konten
+    selected_batch = KONTEN_BATCH[:5]
+    
+    for i, item in enumerate(selected_batch, 1):
+        try:
+            print(f"--- MENGERJAKAN VIDEO {i} DARI 5 ---")
+            
+            # Penggabungan Teks Suara
+            suara_naskah = f"{item['hook']} {item['isi'].replace(chr(10), ' ')} {item['cta']}"
+            
+            # Nama File Output Sementara
+            img_file = f"bg_{i}.jpg"
+            audio_file = f"voice_{i}.mp3"
+            video_file = f"short_output_{i}.mp4"
+            
+            # SEO Title & Description
+            clean_hook = item['hook'].replace('.', '')
+            JUDUL = f"{clean_hook} 💡 #shorts #motivasi #quotes"
+            if len(JUDUL) > 100:
+                JUDUL = JUDUL[:90] + " #shorts"
+                
+            DESKRIPSI = f"{item['isi']}\n\n{item['cta']}\n\n#motivasi #quotes #inspirasi #shorts #mindset #katabijak"
+            TAGS = ["motivasi", "quotes", "shorts", "inspirasi", "katabijak", "mindset"]
+            
+            # TAHAP 1: Gambar AI
+            generate_ai_image(item['prompt_ai'], i, img_file)
+            
+            # TAHAP 2: Suara AI
+            generate_ai_voice(suara_naskah, i, audio_file)
+            
+            # TAHAP 3: Render Video
+            _, durasi = render_short_video(img_file, audio_file, item['hook'], item['isi'], item['cta'], video_file, i)
+            
+            # Validasi Durasi Minimal 15 Detik
+            if durasi < 15.0:
+                print(f"⚠️ Peringatan: Durasi video ({durasi:.1f}s) di bawah 15 detik. Menyesuaikan jeda...")
+            
+            # TAHAP 4: Upload YouTube
+            upload_to_youtube(video_file, JUDUL, DESKRIPSI, TAGS, i)
+            
+            # Anti-Spam Delay antara setiap upload (15 detik)
+            if i < 5:
+                print("⏳ Jeda 15 detik sebelum memproses video berikutnya untuk keamanan API...\n")
+                time.sleep(15)
+                
+        except Exception as e:
+            print(f"❌ Terjadi kesalahan pada video #{i}: {e}\n")
+            
+    print("==================================================")
+    print("✨ SELURUH BATCH 5 VIDEO SELESAI DIPRODUKSI DAN DIUNGGAH ✨")
+    print("==================================================")
