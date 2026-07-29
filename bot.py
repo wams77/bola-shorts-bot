@@ -8,202 +8,142 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# --- KOLEKSI NASKAH MOTIVASI VIRAL (DURASI > 15 DETIK) ---
-KONTEN_BATCH = [
-    {
-        "hook": "HENTIKAN SCROLLMU SEJENAK.",
-        "isi": "Jangan pernah takut berjalan lambat,\ntakutlah jika kamu hanya diam di tempat.\nLangkah kecil hari ini adalah awal dari kemenangan besar.",
-        "cta": "Ketik 'SAYA BISA' di komentar jika kamu siap berubah!",
-        "prompt_ai": "A lonely wanderer standing on a cliff edge looking at a surreal glowing galaxy, epic cinematic sunset, hyperrealistic 8k"
-    },
-    {
-        "hook": "BACA INI SAAT KAMU LELAH.",
-        "isi": "Pohon yang paling kuat tumbuh dari angin yang paling kencang.\nUjian yang kamu hadapi saat ini sedang membentuk dirimu menjadi sosok yang tak terkalahkan.",
-        "cta": "Simpan video ini agar kamu ingat saat sedang turun!",
-        "prompt_ai": "A giant ancient resilient tree on top of a mountain during a thunder storm, dramatic lighting, masterpiece"
-    },
-    {
-        "hook": "RAHASIA ORANG SUKSES.",
-        "isi": "Rasa sakit karena kedisiplinan hanya menekanmu sebentar.\nNamun rasa sakit karena penyesalan akan menghantuimu seumur hidup.\nPilihlah perjuanganmu sekarang.",
-        "cta": "Ketik 'SIAP' untuk berkomitmen pada dirimu sendiri!",
-        "prompt_ai": "A dark moody gym or temple at dawn, golden sunlight piercing through smoke, inspiring cinematic aesthetic"
-    },
-    {
-        "hook": "INGATLAH SATU HAL INI.",
-        "isi": "Kamu tidak bisa mengubah masa lalu yang telah berlalu.\nTapi kamu memegang kendali penuh atas cerita yang ingin kamu tuliskan esok hari.",
-        "cta": "Bagikan video ini ke orang yang sedang butuh semangat!",
-        "prompt_ai": "An open glowing magical book in an old mysterious library, floating dust particles, atmospheric lighting"
-    },
-    {
-        "hook": "PESAN UNTUK MASA DEPANMU.",
-        "isi": "Banyak orang gagal bukan karena kurang berpotensi,\ntetapi karena mereka berhenti tepat satu langkah sebelum berhasil.\nTeruslah melangkah.",
-        "cta": "Ketik 'PANTANG MENYERAH' jika kamu percaya pada prosesmu!",
-        "prompt_ai": "A futuristic glowing path towards a bright horizon, endless road in a scenic valley at twilight, hyperrealistic"
-    }
+# --- BANK NASKAH KELAS ATAS (MENYENTUH & FILOSOFIS) ---
+# Format: ID unik, Hook, Isi Teks, Call to Action, Prompt Gambar
+BANK_KONTEN = [
+    {"id": "V001", "hook": "TERUNTUK KAMU YANG SEDANG LELAH.", "isi": "Tidak apa-apa jika hari ini kamu tidak berlari kencang.\nBertahan dan tetap bernapas di tengah badai, sudah merupakan sebuah kemenangan yang luar biasa.", "cta": "Ketik 'SAYA KUAT' untuk berterima kasih pada dirimu sendiri.", "prompt_ai": "A solitary figure sitting on a bench looking at a peaceful glowing sunset over a calm ocean, cinematic, healing vibe"},
+    {"id": "V002", "hook": "BACA INI SEBELUM MENYERAH.", "isi": "Orang yang paling kuat bukanlah mereka yang tidak pernah menangis.\nTetapi mereka yang menangis di malam hari, namun tetap bangun di pagi hari untuk melanjutkan peperangan.", "cta": "Bagikan ke temanmu yang sedang butuh pelukan hangat.", "prompt_ai": "A beautiful sunrise emerging behind dark heavy rain clouds over a misty mountain, hope, epic lighting, highly detailed"},
+    {"id": "V003", "hook": "SADARKAH KAMU?", "isi": "Satu-satunya orang yang akan bersamamu dari lahir hingga akhir hayat, adalah dirimu sendiri.\nBerhentilah terlalu keras pada dirimu. Maafkanlah masa lalumu.", "cta": "Ketik 'AKU BERHARGA' jika kamu sepakat.", "prompt_ai": "A person looking at their own glowing reflection in a crystal clear magical lake, starry night, serene atmosphere"},
+    {"id": "V004", "hook": "RAHASIA KETENANGAN HIDUP.", "isi": "Terkadang, jawaban dari masalahmu bukanlah mencari jalan keluar.\nTapi menerima bahwa beberapa hal memang ditakdirkan terjadi, untuk mendewasakanmu.", "cta": "Simpan video ini untuk pengingat di kala sedih.", "prompt_ai": "A lone boat floating on a perfectly calm mirror-like river leading to a glowing giant moon, surreal, peaceful"},
+    {"id": "V005", "hook": "WAKTU TERUS BERJALAN.", "isi": "Jangan biarkan ketakutan akan kegagalan menahanmu.\nRasa sakit karena mencoba akan hilang dalam seminggu.\nTapi rasa sakit karena penasaran, akan menghantuimu seumur hidup.", "cta": "Ketik 'SIAP MELANGKAH' untuk memulai hal baru!", "prompt_ai": "An open doorway in a dark room leading to a bright, lush magical forest, stepping into the unknown, cinematic"},
+    {"id": "V006", "hook": "HENTIKAN SCROLLMU 15 DETIK.", "isi": "Kamu sudah terlalu banyak memikirkan kebahagiaan orang lain.\nHari ini, ambil waktu sejenak, dan tanyakan pada hatimu:\n'Apa yang sebenarnya membuatku bahagia?'", "cta": "Ketik jawabanmu di kolom komentar!", "prompt_ai": "A cozy warm glowing cabin in a snowy dark forest, safe haven, comforting atmospheric lighting, 8k"},
+    {"id": "V007", "hook": "FAKTA YANG MENYAKITKAN.", "isi": "Semakin kamu dewasa, lingkar pertemananmu akan semakin mengecil.\nItu bukan karena kamu sombong. Kamu hanya mulai mengerti bedanya antara kuantitas dan kualitas.", "cta": "Tag sahabat terbaikmu di komentar!", "prompt_ai": "Two glowing wolves standing together on a snowy cliff looking at a vast aurora borealis, loyalty, epic masterpiece"}
 ]
 
-# --- 1. AI IMAGE GENERATOR (Pollinations AI) ---
+# --- MANAJEMEN MEMORI (ANTI DUPLIKASI) ---
+HISTORY_FILE = "history.txt"
+
+def get_used_ids():
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    with open(HISTORY_FILE, 'r') as f:
+        return [line.strip() for line in f.readlines()]
+
+def mark_id_as_used(video_id):
+    with open(HISTORY_FILE, 'a') as f:
+        f.write(f"{video_id}\n")
+
+# --- 1. AI IMAGE GENERATOR ---
 def generate_ai_image(prompt, index, output_filename):
-    print(f"[{index}/5] 🎨 Meminta AI melukis gambar: '{prompt[:30]}...'")
-    full_prompt = f"{prompt}, dark moody aesthetic, vertical 9:16 portrait, cinematic lighting, ultra detailed, 8k"
+    print(f"[{index}/5] 🎨 Melukis visual AI...")
+    full_prompt = f"{prompt}, dark moody aesthetic, vertical portrait, cinematic lighting, masterpiece"
     encoded_prompt = urllib.parse.quote(full_prompt)
     seed = random.randint(1, 99999)
     image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1920&nologo=true&seed={seed}"
-    
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-    response = requests.get(image_url, headers=headers, stream=True)
+    response = requests.get(image_url, stream=True)
     if response.status_code == 200:
         with open(output_filename, 'wb') as f:
             for chunk in response.iter_content(1024):
                 f.write(chunk)
         return output_filename
-    else:
-        raise Exception(f"Gagal mengunduh gambar AI (Status: {response.status_code})")
+    raise Exception("Gagal mengunduh gambar AI.")
 
-# --- 2. AI NEURAL VOICE GENERATOR (Edge-TTS) ---
+# --- 2. AI NEURAL VOICE ---
 def generate_ai_voice(full_text, index, output_audio):
-    print(f"[{index}/5] 🎙️ Menyuarakan naskah dengan Suara AI Neural...")
-    # Kecepatan dinaikkan sedikit (-5%) agar intonasi tegas dan tidak bosan
+    print(f"[{index}/5] 🎙️ Menyuarakan naskah...")
     command = f'edge-tts --voice id-ID-ArdiNeural --rate=-5% --text "{full_text}" --write-media {output_audio}'
     os.system(command)
-    if os.path.exists(output_audio):
-        return output_audio
-    else:
-        raise Exception("Gagal membuat suara AI.")
+    return output_audio
 
-# --- 3. EDITOR VIDEO DENGAN LAYOUT TEKS PRESISI (SAFE ZONE) ---
-def render_short_video(bg_image_path, audio_path, hook_text, isi_text, cta_text, output_video, index):
-    print(f"[{index}/5] 🎬 Merakit video Shorts durasi monetisasi...")
-    
+# --- 3. EDITOR VIDEO ALA CAPCUT ---
+def render_short_video(bg_image_path, audio_path, item, output_video, index):
+    print(f"[{index}/5] 🎬 Merakit video CapCut Style...")
     audio = AudioFileClip(audio_path)
-    audio_duration = audio.duration
-    # Durasi video disesuaikan dengan suara + 1 detik jeda nyaman
-    video_duration = audio_duration + 1.0 
+    video_duration = audio.duration + 1.5 
     
-    # 1. Background Gambar AI
-    bg_clip = ImageClip(bg_image_path).with_duration(video_duration)
-    bg_clip = bg_clip.resized(height=1920)
-    bg_clip = bg_clip.cropped(x_center=bg_clip.w/2, y_center=bg_clip.h/2, width=1080, height=1920)
+    # Background & Overlay
+    bg_clip = ImageClip(bg_image_path).with_duration(video_duration).resized(height=1920).cropped(x_center=540, y_center=960, width=1080, height=1920)
+    overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.5).with_duration(video_duration)
     
-    # 2. Dark Overlay Transparan (Agar Teks Mudah Dibaca)
-    overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.45).with_duration(video_duration)
+    # Font Style (Menggunakan default font tebal yang terbaca jelas)
+    font_style = "DejaVu-Sans-Bold" 
     
-    # Combined Text untuk Tampilan Utama
-    full_display_text = f"🔥 {hook_text} 🔥\n\n{isi_text}\n\n👇 {cta_text}"
+    # 1. Teks Hook (Kuning, Atas)
+    txt_hook = TextClip(text=item['hook'], font=font_style, font_size=55, color='yellow', stroke_color='black', stroke_width=2.5, size=(950, None), method='caption', text_align='center')
+    txt_hook = txt_hook.with_duration(video_duration).with_position(('center', 450))
     
-    # 3. Teks Utama dengan Layout Safe Zone
-    txt_clip = TextClip(
-        text=full_display_text, 
-        font_size=48, 
-        color='white', 
-        size=(920, None),
-        method='caption',
-        text_align='center'
-    ).with_duration(video_duration).with_position('center')
+    # 2. Teks Isi (Putih, Tengah)
+    txt_isi = TextClip(text=item['isi'], font=font_style, font_size=50, color='white', stroke_color='black', stroke_width=2, size=(950, None), method='caption', text_align='center')
+    txt_isi = txt_isi.with_duration(video_duration).with_position(('center', 650))
     
-    # 4. Kotak Latar Teks (Text Card Overlay) agar Teks Terbaca Jelas di HP Mana Pun
-    box_width = 980
-    box_height = txt_clip.h + 80
-    text_bg_box = ColorClip(size=(box_width, box_height), color=(15, 15, 20)).with_opacity(0.70).with_duration(video_duration).with_position('center')
+    # 3. Teks CTA (Cyan, Bawah)
+    txt_cta = TextClip(text=f"👇 {item['cta']}", font=font_style, font_size=45, color='cyan', stroke_color='black', stroke_width=2, size=(950, None), method='caption', text_align='center')
+    txt_cta = txt_cta.with_duration(video_duration).with_position(('center', 1300))
     
-    # Merakit Seluruh Layer
-    video = CompositeVideoClip([bg_clip, overlay, text_bg_box, txt_clip]).with_audio(audio)
-    
-    # Render Video
-    video.write_videofile(
-        output_video, 
-        fps=24, 
-        codec="libx264", 
-        audio_codec="aac", 
-        preset="ultrafast"
-    )
-    print(f"[{index}/5] ✅ Video #{index} selesai dirender! Durasi: {video_duration:.1f} detik")
+    # 4. Progress Bar Estetik (Bawah Layar)
+    def make_progress_bar(t):
+        w = int(1080 * (t / video_duration))
+        if w == 0: w = 1
+        return ColorClip(size=(w, 15), color=(255, 215, 0)).get_frame(t)
+        
+    progress_bar = ColorClip(size=(1080, 15), color=(255, 215, 0)).with_duration(video_duration)
+    # Animasi berjalan dari kiri ke kanan
+    progress_bar = progress_bar.fl_image(lambda image, t: make_progress_bar(t)) 
+    progress_bar = progress_bar.with_position(('left', 'bottom'))
+
+    # Penggabungan (Assembly)
+    video = CompositeVideoClip([bg_clip, overlay, txt_hook, txt_isi, txt_cta, progress_bar]).with_audio(audio)
+    video.write_videofile(output_video, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
     return output_video, video_duration
 
-# --- 4. AUTO-UPLOAD KE YOUTUBE ---
+# --- 4. YOUTUBE UPLOADER ---
 def upload_to_youtube(video_path, title, description, tags, index):
-    print(f"[{index}/5] 🚀 Mengunggah video #{index} ke YouTube...")
-    creds = Credentials(
-        token=None,
-        refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"),
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=os.environ.get("YOUTUBE_CLIENT_ID"),
-        client_secret=os.environ.get("YOUTUBE_CLIENT_SECRET")
-    )
-    
+    print(f"[{index}/5] 🚀 Mengunggah ke YouTube...")
+    creds = Credentials(token=None, refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"), token_uri="https://oauth2.googleapis.com/token", client_id=os.environ.get("YOUTUBE_CLIENT_ID"), client_secret=os.environ.get("YOUTUBE_CLIENT_SECRET"))
     youtube = build('youtube', 'v3', credentials=creds)
-    body = {
-        "snippet": {
-            "title": title,
-            "description": description,
-            "tags": tags,
-            "categoryId": "27" # Category: Education / Motivation
-        },
-        "status": {
-            "privacyStatus": "public",
-            "selfDeclaredMadeForKids": False
-        }
-    }
-    
+    body = {"snippet": {"title": title, "description": description, "tags": tags, "categoryId": "27"}, "status": {"privacyStatus": "public", "selfDeclaredMadeForKids": False}}
     media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
-    request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
-    response = request.execute()
-    print(f"[{index}/5] 🎉 BERHASIL UNGGAH! Link Video: https://youtu.be/{response['id']}\n")
+    response = youtube.videos().insert(part="snippet,status", body=body, media_body=media).execute()
+    print(f"[{index}/5] 🎉 BERHASIL! Link: https://youtu.be/{response['id']}\n")
 
-# --- EXECUTION MAIN LOOP (BATCH 5 VIDEOS) ---
+# --- MAIN LOOP ---
 if __name__ == "__main__":
-    print("==================================================")
-    print("⚡ MEMULAI PRODUKSI MASAL 5 VIDEO SHORTS MOTIVASI ⚡")
-    print("==================================================\n")
+    used_ids = get_used_ids()
+    available_content = [c for c in BANK_KONTEN if c['id'] not in used_ids]
     
-    # Mengambil 5 item dari koleksi konten
-    selected_batch = KONTEN_BATCH[:5]
+    if not available_content:
+        print("⚠️ Semua naskah di Bank Konten sudah digunakan! Silakan tambahkan naskah baru ke bot.py.")
+        exit()
+        
+    # Ambil maksimal 5 konten baru
+    selected_batch = available_content[:5]
+    print(f"⚡ MEMPROSES {len(selected_batch)} VIDEO BARU ⚡\n")
     
     for i, item in enumerate(selected_batch, 1):
         try:
-            print(f"--- MENGERJAKAN VIDEO {i} DARI 5 ---")
-            
-            # Penggabungan Teks Suara
             suara_naskah = f"{item['hook']} {item['isi'].replace(chr(10), ' ')} {item['cta']}"
-            
-            # Nama File Output Sementara
             img_file = f"bg_{i}.jpg"
             audio_file = f"voice_{i}.mp3"
-            video_file = f"short_output_{i}.mp4"
+            video_file = f"short_{i}.mp4"
             
-            # SEO Title & Description
             clean_hook = item['hook'].replace('.', '')
-            JUDUL = f"{clean_hook} 💡 #shorts #motivasi #quotes"
-            if len(JUDUL) > 100:
-                JUDUL = JUDUL[:90] + " #shorts"
-                
-            DESKRIPSI = f"{item['isi']}\n\n{item['cta']}\n\n#motivasi #quotes #inspirasi #shorts #mindset #katabijak"
-            TAGS = ["motivasi", "quotes", "shorts", "inspirasi", "katabijak", "mindset"]
+            JUDUL = f"{clean_hook} 💡 #shorts #motivasi #renungan"
+            if len(JUDUL) > 100: JUDUL = JUDUL[:90] + " #shorts"
+            DESKRIPSI = f"{item['isi']}\n\n{item['cta']}\n\n#motivasi #renungan #inspirasi #shorts #mindset #psikologi #katabijak"
+            TAGS = ["motivasi", "quotes", "shorts", "renungan", "psikologi", "mindset"]
             
-            # TAHAP 1: Gambar AI
             generate_ai_image(item['prompt_ai'], i, img_file)
-            
-            # TAHAP 2: Suara AI
             generate_ai_voice(suara_naskah, i, audio_file)
+            _, durasi = render_short_video(img_file, audio_file, item, video_file, i)
             
-            # TAHAP 3: Render Video
-            _, durasi = render_short_video(img_file, audio_file, item['hook'], item['isi'], item['cta'], video_file, i)
-            
-            # Validasi Durasi Minimal 15 Detik
-            if durasi < 15.0:
-                print(f"⚠️ Peringatan: Durasi video ({durasi:.1f}s) di bawah 15 detik. Menyesuaikan jeda...")
-            
-            # TAHAP 4: Upload YouTube
             upload_to_youtube(video_file, JUDUL, DESKRIPSI, TAGS, i)
             
-            # Anti-Spam Delay antara setiap upload (15 detik)
-            if i < 5:
-                print("⏳ Jeda 15 detik sebelum memproses video berikutnya untuk keamanan API...\n")
+            # Catat memori bahwa video ini sudah diunggah
+            mark_id_as_used(item['id'])
+            
+            if i < len(selected_batch):
+                print("⏳ Jeda 15 detik untuk keamanan API YouTube...\n")
                 time.sleep(15)
                 
         except Exception as e:
-            print(f"❌ Terjadi kesalahan pada video #{i}: {e}\n")
-            
-    print("==================================================")
-    print("✨ SELURUH BATCH 5 VIDEO SELESAI DIPRODUKSI DAN DIUNGGAH ✨")
-    print("==================================================")
+            print(f"❌ Kesalahan pada video {item['id']}: {e}\n")
