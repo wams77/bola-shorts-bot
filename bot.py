@@ -9,7 +9,6 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 # --- BANK NASKAH KELAS ATAS (MENYENTUH & FILOSOFIS) ---
-# Format: ID unik, Hook, Isi Teks, Call to Action, Prompt Gambar
 BANK_KONTEN = [
     {"id": "V001", "hook": "TERUNTUK KAMU YANG SEDANG LELAH.", "isi": "Tidak apa-apa jika hari ini kamu tidak berlari kencang.\nBertahan dan tetap bernapas di tengah badai, sudah merupakan sebuah kemenangan yang luar biasa.", "cta": "Ketik 'SAYA KUAT' untuk berterima kasih pada dirimu sendiri.", "prompt_ai": "A solitary figure sitting on a bench looking at a peaceful glowing sunset over a calm ocean, cinematic, healing vibe"},
     {"id": "V002", "hook": "BACA INI SEBELUM MENYERAH.", "isi": "Orang yang paling kuat bukanlah mereka yang tidak pernah menangis.\nTetapi mereka yang menangis di malam hari, namun tetap bangun di pagi hari untuk melanjutkan peperangan.", "cta": "Bagikan ke temanmu yang sedang butuh pelukan hangat.", "prompt_ai": "A beautiful sunrise emerging behind dark heavy rain clouds over a misty mountain, hope, epic lighting, highly detailed"},
@@ -32,6 +31,19 @@ def get_used_ids():
 def mark_id_as_used(video_id):
     with open(HISTORY_FILE, 'a') as f:
         f.write(f"{video_id}\n")
+
+# --- MENGUNDUH FONT PRO (ANTI ERROR) ---
+def get_custom_font():
+    font_filename = "Montserrat-Black.ttf"
+    if not os.path.exists(font_filename):
+        print("📥 Mengunduh Font Estetik (Montserrat Black)...")
+        # Mengambil font berlisensi gratis langsung dari repositori Google Fonts
+        url = "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat-Black.ttf"
+        r = requests.get(url)
+        with open(font_filename, 'wb') as f:
+            f.write(r.content)
+    # Mengembalikan path absolut agar sistem grafis tidak bingung mencari file
+    return os.path.abspath(font_filename)
 
 # --- 1. AI IMAGE GENERATOR ---
 def generate_ai_image(prompt, index, output_filename):
@@ -61,12 +73,11 @@ def render_short_video(bg_image_path, audio_path, item, output_video, index):
     audio = AudioFileClip(audio_path)
     video_duration = audio.duration + 1.5 
     
-    # Background & Overlay
     bg_clip = ImageClip(bg_image_path).with_duration(video_duration).resized(height=1920).cropped(x_center=540, y_center=960, width=1080, height=1920)
     overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.5).with_duration(video_duration)
     
-    # Font Style (Menggunakan default font tebal yang terbaca jelas)
-    font_style = "DejaVu-Sans-Bold" 
+    # Menggunakan font kustom yang diunduh (Pasti Terbaca!)
+    font_style = get_custom_font()
     
     # 1. Teks Hook (Kuning, Atas)
     txt_hook = TextClip(text=item['hook'], font=font_style, font_size=55, color='yellow', stroke_color='black', stroke_width=2.5, size=(950, None), method='caption', text_align='center')
@@ -80,18 +91,16 @@ def render_short_video(bg_image_path, audio_path, item, output_video, index):
     txt_cta = TextClip(text=f"👇 {item['cta']}", font=font_style, font_size=45, color='cyan', stroke_color='black', stroke_width=2, size=(950, None), method='caption', text_align='center')
     txt_cta = txt_cta.with_duration(video_duration).with_position(('center', 1300))
     
-    # 4. Progress Bar Estetik (Bawah Layar)
+    # 4. Progress Bar Estetik
     def make_progress_bar(t):
         w = int(1080 * (t / video_duration))
         if w == 0: w = 1
         return ColorClip(size=(w, 15), color=(255, 215, 0)).get_frame(t)
         
     progress_bar = ColorClip(size=(1080, 15), color=(255, 215, 0)).with_duration(video_duration)
-    # Animasi berjalan dari kiri ke kanan
     progress_bar = progress_bar.fl_image(lambda image, t: make_progress_bar(t)) 
     progress_bar = progress_bar.with_position(('left', 'bottom'))
 
-    # Penggabungan (Assembly)
     video = CompositeVideoClip([bg_clip, overlay, txt_hook, txt_isi, txt_cta, progress_bar]).with_audio(audio)
     video.write_videofile(output_video, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
     return output_video, video_duration
@@ -115,7 +124,6 @@ if __name__ == "__main__":
         print("⚠️ Semua naskah di Bank Konten sudah digunakan! Silakan tambahkan naskah baru ke bot.py.")
         exit()
         
-    # Ambil maksimal 5 konten baru
     selected_batch = available_content[:5]
     print(f"⚡ MEMPROSES {len(selected_batch)} VIDEO BARU ⚡\n")
     
@@ -137,8 +145,6 @@ if __name__ == "__main__":
             _, durasi = render_short_video(img_file, audio_file, item, video_file, i)
             
             upload_to_youtube(video_file, JUDUL, DESKRIPSI, TAGS, i)
-            
-            # Catat memori bahwa video ini sudah diunggah
             mark_id_as_used(item['id'])
             
             if i < len(selected_batch):
