@@ -41,10 +41,14 @@ jobs:
         run: |
           python bot.py
 
-      - name: Simpan Memori Bot (Anti-Duplikasi)
+     - name: Simpan Memori Bot (Anti-Duplikasi)
         run: |
           git config --global user.name 'Bot Editor AI'
           git config --global user.email 'bot@actions.github.com'
+          
+          # Baris baru penangkal error: Memastikan file history.txt dibuat jika belum ada
+          touch history.txt 
+          
           git add history.txt
           # Hanya commit jika ada perubahan di history.txt
           git diff --quiet && git diff --staged --quiet || git commit -m "update memori video yang sudah diunggah"
