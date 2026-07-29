@@ -32,17 +32,29 @@ def mark_id_as_used(video_id):
     with open(HISTORY_FILE, 'a') as f:
         f.write(f"{video_id}\n")
 
-# --- MENGUNDUH FONT PRO (ANTI ERROR) ---
+# --- MENGUNDUH FONT PRO (ANTI KORUP & ANTI ERROR) ---
 def get_custom_font():
     font_filename = "Montserrat-Black.ttf"
+    
+    # 1. Hapus file font jika sebelumnya terunduh sebagai file HTML yang rusak (< 100KB)
+    if os.path.exists(font_filename) and os.path.getsize(font_filename) < 100000:
+        os.remove(font_filename)
+        
+    # 2. Unduh ulang dari repositori asli yang terjamin kestabilannya
     if not os.path.exists(font_filename):
         print("📥 Mengunduh Font Estetik (Montserrat Black)...")
-        # Mengambil font berlisensi gratis langsung dari repositori Google Fonts
-        url = "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat-Black.ttf"
+        # Menggunakan sumber permanen dari GitHub kreator Montserrat
+        url = "https://raw.githubusercontent.com/JulietaUla/Montserrat/master/fonts/ttf/Montserrat-Black.ttf"
         r = requests.get(url)
-        with open(font_filename, 'wb') as f:
-            f.write(r.content)
-    # Mengembalikan path absolut agar sistem grafis tidak bingung mencari file
+        
+        if r.status_code == 200:
+            with open(font_filename, 'wb') as f:
+                f.write(r.content)
+            print("✅ Font berhasil diunduh dengan sempurna!")
+        else:
+            raise Exception(f"Gagal mengunduh font. Status Code: {r.status_code}")
+            
+    # Mengembalikan path absolut agar sistem grafis bisa membacanya
     return os.path.abspath(font_filename)
 
 # --- 1. AI IMAGE GENERATOR ---
@@ -76,22 +88,18 @@ def render_short_video(bg_image_path, audio_path, item, output_video, index):
     bg_clip = ImageClip(bg_image_path).with_duration(video_duration).resized(height=1920).cropped(x_center=540, y_center=960, width=1080, height=1920)
     overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.5).with_duration(video_duration)
     
-    # Menggunakan font kustom yang diunduh (Pasti Terbaca!)
+    # Menggunakan font kustom yang sudah dipastikan aman
     font_style = get_custom_font()
     
-    # 1. Teks Hook (Kuning, Atas)
     txt_hook = TextClip(text=item['hook'], font=font_style, font_size=55, color='yellow', stroke_color='black', stroke_width=2.5, size=(950, None), method='caption', text_align='center')
     txt_hook = txt_hook.with_duration(video_duration).with_position(('center', 450))
     
-    # 2. Teks Isi (Putih, Tengah)
     txt_isi = TextClip(text=item['isi'], font=font_style, font_size=50, color='white', stroke_color='black', stroke_width=2, size=(950, None), method='caption', text_align='center')
     txt_isi = txt_isi.with_duration(video_duration).with_position(('center', 650))
     
-    # 3. Teks CTA (Cyan, Bawah)
     txt_cta = TextClip(text=f"👇 {item['cta']}", font=font_style, font_size=45, color='cyan', stroke_color='black', stroke_width=2, size=(950, None), method='caption', text_align='center')
     txt_cta = txt_cta.with_duration(video_duration).with_position(('center', 1300))
     
-    # 4. Progress Bar Estetik
     def make_progress_bar(t):
         w = int(1080 * (t / video_duration))
         if w == 0: w = 1
