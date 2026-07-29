@@ -2,10 +2,12 @@ name: Auto Motivasi Shorts Bot
 
 on:
   schedule:
-    # Berjalan otomatis setiap hari pada pukul 09:30 UTC 
-    # (Sama dengan pukul 16:30 WIB / 17:30 WITA / 18:30 WIT)
-    - cron: '30 9 * * *'
-  workflow_dispatch: # Memungkinkan Anda menekan tombol "Run workflow" secara manual kapan saja
+    - cron: '30 9 * * *' # 16:30 WIB setiap hari
+  workflow_dispatch:
+
+# Memberikan izin kepada bot untuk mengubah file history.txt di repositori
+permissions:
+  contents: write
 
 jobs:
   build-and-deploy:
@@ -19,15 +21,31 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install Mesin Grafis (ImageMagick)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+          # Memperbaiki kebijakan ImageMagick agar MoviePy bisa menulis teks
+          sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml
+
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install edge-tts moviepy requests google-api-python-client google-auth-oauthlib google-auth-httplib2
 
-      - name: Eksekusi Bot Utama (Batch 5 Video)
+      - name: Eksekusi Bot Produksi
         env:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
           python bot.py
+
+      - name: Simpan Memori Bot (Anti-Duplikasi)
+        run: |
+          git config --global user.name 'Bot Editor AI'
+          git config --global user.email 'bot@actions.github.com'
+          git add history.txt
+          # Hanya commit jika ada perubahan di history.txt
+          git diff --quiet && git diff --staged --quiet || git commit -m "update memori video yang sudah diunggah"
+          git push
