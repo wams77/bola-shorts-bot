@@ -2,10 +2,10 @@ name: Auto Motivasi Shorts Bot
 
 on:
   schedule:
-    - cron: '30 9 * * *' # 16:30 WIB setiap hari
-  workflow_dispatch:
+    - cron: '30 9 * * *' # Berjalan otomatis pukul 16:30 WIB setiap hari
+  workflow_dispatch: # Memunculkan tombol "Run workflow" untuk eksekusi manual
 
-# Memberikan izin kepada bot untuk mengubah file history.txt di repositori
+# Memberikan izin kepada bot untuk menulis/mengubah file history.txt di repositori
 permissions:
   contents: write
 
@@ -25,7 +25,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
-          # Memperbaiki kebijakan ImageMagick agar MoviePy bisa menulis teks
+          # Memperbaiki kebijakan ImageMagick agar MoviePy bisa merender teks dengan rapi
           sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml
 
       - name: Install Dependencies
@@ -40,12 +40,13 @@ jobs:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
           python bot.py
-- name: Simpan Memori Bot (Anti-Duplikasi)
+
+      - name: Simpan Memori Bot (Anti-Duplikasi)
         run: |
           git config --global user.name 'Bot Editor AI'
           git config --global user.email 'bot@actions.github.com'
           
-          # Baris baru penangkal error: Memastikan file history.txt dibuat jika belum ada
+          # Membuat file history.txt jika belum ada (Mencegah Error 128)
           touch history.txt 
           
           git add history.txt
