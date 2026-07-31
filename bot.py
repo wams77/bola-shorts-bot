@@ -120,39 +120,46 @@ def get_custom_font():
             raise Exception(f"Gagal mengunduh font. Status Code: {r.status_code}")
     return os.path.abspath(font_filename)
 
-# --- 2. PEXELS VIDEO BACKGROUND DOWNLOADER ---
+# --- 2. PEXELS VIDEO BACKGROUND DOWNLOADER DENGAN VALIDASI ---
 def download_pexels_video(query, output_filename):
     print(f"🎬 Mencari video latar relevan di Pexels untuk: '{query}'...")
     api_key = os.environ.get("PEXELS_API_KEY")
     headers = {"Authorization": api_key}
     
     url = f"https://api.pexels.com/videos/search?query={urllib.parse.quote(query)}&orientation=portrait&per_page=5"
-    response = requests.get(url, headers=headers).json()
     
-    if "videos" in response and len(response["videos"]) > 0:
-        video_obj = random.choice(response["videos"])
-        video_files = video_obj["video_files"]
-        hd_file = next((v for v in video_files if v["quality"] == "hd"), video_files[0])
-        video_url = hd_file["link"]
-        
-        vid_data = requests.get(video_url).content
-        with open(output_filename, 'wb') as f:
-            f.write(vid_data)
-        print("✅ Stok video Pexels berhasil diunduh!")
-        return output_filename
-    else:
-        # Fallback jika kueri spesifik tidak ditemukan
-        print("⚠️ Video spesifik tidak ditemukan, menggunakan stok umum...")
-        fallback_url = f"https://api.pexels.com/videos/search?query=cinematic+nature+drone&orientation=portrait&per_page=1"
-        fallback_res = requests.get(fallback_url, headers=headers).json()
-        if "videos" in fallback_res and len(fallback_res["videos"]) > 0:
-            video_obj = fallback_res["videos"][0]
-            hd_file = video_obj["video_files"][0]
-            vid_data = requests.get(hd_file["link"]).content
+    try:
+        response = requests.get(url, headers=headers, timeout=15).json()
+        if "videos" in response and len(response["videos"]) > 0:
+            video_obj = random.choice(response["videos"])
+            video_files = video_obj["video_files"]
+            hd_file = next((v for v in video_files if v["quality"] == "hd"), video_files[0])
+            video_url = hd_file["link"]
+            
+            vid_data = requests.get(video_url, timeout=30).content
             with open(output_filename, 'wb') as f:
                 f.write(vid_data)
-            return output_filename
-        raise Exception("Gagal mengunduh video dari Pexels API.")
+                
+            if os.path.exists(output_filename) and os.path.getsize(output_filename) > 50000:
+                print("✅ Stok video Pexels berhasil diunduh dan divalidasi!")
+                return output_filename
+    except Exception as e:
+        print(f"⚠️ Peringatan unduhan Pexels: {e}")
+
+    # Fallback aman jika gagal/korup
+    print("⚠️ Menggunakan video latar cadangan universal yang aman...")
+    fallback_url = "https://api.pexels.com/videos/search?query=nature+landscape+drone&orientation=portrait&per_page=1"
+    fallback_res = requests.get(fallback_url, headers=headers).json()
+    
+    if "videos" in fallback_res and len(fallback_res["videos"]) > 0:
+        video_obj = fallback_res["videos"][0]
+        hd_file = video_obj["video_files"][0]
+        vid_data = requests.get(hd_file["link"], timeout=30).content
+        with open(output_filename, 'wb') as f:
+            f.write(vid_data)
+        return output_filename
+        
+    raise Exception("Gagal total mengunduh video dari Pexels API.")
 
 # --- 3. AI NEURAL VOICE ---
 def generate_ai_voice(full_text, index, output_audio):
@@ -161,7 +168,7 @@ def generate_ai_voice(full_text, index, output_audio):
     os.system(command)
     return output_audio
 
-# --- 4. EDITOR VIDEO CAPCUT STYLE (DENGAN BACKGROUND VIDEO) ---
+# --- 4. EDITOR VIDEO CAPCUT STYLE (ANTI-ERROR TEXTCLIP SHAPE) ---
 def render_short_video(bg_video_path, audio_path, item, output_video, index):
     print(f"[{index}/5] 🎬 Merakit video latar Pexels & Teks...")
     audio = AudioFileClip(audio_path)
@@ -181,13 +188,14 @@ def render_short_video(bg_video_path, audio_path, item, output_video, index):
     
     font_style = get_custom_font()
     
-    txt_hook = TextClip(text=item['hook'], font=font_style, font_size=55, color='yellow', stroke_color='black', stroke_width=2.5, size=(950, None), method='caption', text_align='center')
+    # Menggunakan metode aman untuk TextClip agar terhindar dari error broadcasting shape (376,0)
+    txt_hook = TextClip(text=item['hook'], font=font_style, font_size=55, color='yellow', stroke_color='black', stroke_width=2.5, method='caption', size=(950, None))
     txt_hook = txt_hook.with_duration(video_duration).with_position(('center', 450))
     
-    txt_isi = TextClip(text=item['isi'], font=font_style, font_size=50, color='white', stroke_color='black', stroke_width=2, size=(950, None), method='caption', text_align='center')
+    txt_isi = TextClip(text=item['isi'], font=font_style, font_size=50, color='white', stroke_color='black', stroke_width=2, method='caption', size=(950, None))
     txt_isi = txt_isi.with_duration(video_duration).with_position(('center', 650))
     
-    txt_cta = TextClip(text=f"👇 {item['cta']}", font=font_style, font_size=45, color='cyan', stroke_color='black', stroke_width=2, size=(950, None), method='caption', text_align='center')
+    txt_cta = TextClip(text=f"👇 {item['cta']}", font=font_style, font_size=45, color='cyan', stroke_color='black', stroke_width=2, method='caption', size=(950, None))
     txt_cta = txt_cta.with_duration(video_duration).with_position(('center', 1300))
     
     progress_bar = ColorClip(size=(1080, 15), color=(255, 215, 0)).with_duration(video_duration)
