@@ -21,17 +21,17 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Mesin Grafis (ImageMagick)
+      - name: Install Mesin Grafis & Video (ImageMagick & FFmpeg)
         run: |
           sudo apt-get update
-          sudo apt-get install -y imagemagick
+          # Menambahkan ffmpeg agar pemrosesan video Pexels berjalan mulus
+          sudo apt-get install -y imagemagick ffmpeg
           # Memperbaiki kebijakan ImageMagick agar MoviePy bisa merender teks dengan rapi
           sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          # Mengganti google-generativeai dengan groq dan memastikan pillow terinstal
           pip install edge-tts moviepy requests google-api-python-client google-auth-oauthlib google-auth-httplib2 groq pillow
 
       - name: Eksekusi Bot Produksi
@@ -39,8 +39,9 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          # Mengganti GEMINI_API_KEY menjadi GROQ_API_KEY
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          # Menambahkan PEXELS_API_KEY agar bot bisa mendownload video latar
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: |
           python bot.py
 
