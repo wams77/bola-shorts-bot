@@ -4,7 +4,8 @@ import random
 import requests
 import urllib.parse
 from groq import Groq
-from moviepy import AudioFileClip, VideoFileClip, TextClip, CompositeVideoClip, ColorClip, ImageClip, concatenate_videoclips
+from moviepy import AudioFileClip, VideoFileClip, CompositeVideoClip, ColorClip, ImageClip, concatenate_videoclips
+from PIL import Image, ImageDraw, ImageFont
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -168,7 +169,86 @@ def generate_ai_voice(full_text, index, output_audio):
     os.system(command)
     return output_audio
 
-# --- 4. EDITOR VIDEO CAPCUT STYLE (BEBAS ERROR SHAPE) ---
+# --- 4. TEXT OVERLAY GENERATOR (PILLOW ENGINE) ---
+def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
+    img = Image.new("RGBA", img_size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    
+    font_path = get_custom_font()
+    font_hook = ImageFont.truetype(font_path, 55)
+    font_isi = ImageFont.truetype(font_path, 45)
+    font_cta = ImageFont.truetype(font_path, 42)
+    
+    max_width = img_size[0] - 120  # Margin 60px kiri-kanan
+    
+    def wrap_text(text, font):
+        words = text.split()
+        lines = []
+        current_line = ""
+        for word in words:
+            test_line = f"{current_line} {word}".strip()
+            try:
+                w_test = draw.textlength(test_line, font=font)
+            except AttributeError:
+                w_test = draw.textbbox((0, 0), test_line, font=font)[2]
+                
+            if w_test <= max_width:
+                current_line = test_line
+            else:
+                lines.append(current_line)
+                current_line = word
+        if current_line:
+            lines.append(current_line)
+        return lines
+
+    lines_hook = wrap_text(item['hook'], font_hook)
+    lines_isi = wrap_text(item['isi'], font_isi)
+    lines_cta = [f"👇 {item['cta']}"]
+    
+    # 1. Render Hook (Warna Kuning, Posisi Y=450)
+    y = 450
+    for line in lines_hook:
+        try:
+            w = draw.textlength(line, font=font_hook)
+        except AttributeError:
+            w = draw.textbbox((0, 0), line, font=font_hook)[2]
+        x = (img_size[0] - w) // 2
+        # Outline Hitam
+        for ax, ay in [(-3,0), (3,0), (0,-3), (0,3), (-3,-3), (3,3), (-3,3), (3,-3)]:
+            draw.text((x + ax, y + ay), line, font=font_hook, fill="black")
+        draw.text((x, y), line, font=font_hook, fill="yellow")
+        y += 70
+
+    # 2. Render Isi Naskah (Warna Putih, Posisi Y=680)
+    y = 680
+    for line in lines_isi:
+        try:
+            w = draw.textlength(line, font=font_isi)
+        except AttributeError:
+            w = draw.textbbox((0, 0), line, font=font_isi)[2]
+        x = (img_size[0] - w) // 2
+        for ax, ay in [(-3,0), (3,0), (0,-3), (0,3), (-3,-3), (3,3), (-3,3), (3,-3)]:
+            draw.text((x + ax, y + ay), line, font=font_isi, fill="black")
+        draw.text((x, y), line, font=font_isi, fill="white")
+        y += 60
+
+    # 3. Render CTA (Warna Cyan, Posisi Y=1350)
+    y = 1350
+    for line in lines_cta:
+        try:
+            w = draw.textlength(line, font=font_cta)
+        except AttributeError:
+            w = draw.textbbox((0, 0), line, font=font_cta)[2]
+        x = (img_size[0] - w) // 2
+        for ax, ay in [(-3,0), (3,0), (0,-3), (0,3), (-3,-3), (3,3), (-3,3), (3,-3)]:
+            draw.text((x + ax, y + ay), line, font=font_cta, fill="black")
+        draw.text((x, y), line, font=font_cta, fill="cyan")
+        y += 55
+
+    img.save(output_path)
+    return output_path
+
+# --- 5. EDITOR VIDEO UTAMA ---
 def render_short_video(bg_video_path, audio_path, item, output_video, index):
     print(f"[{index}/5] 🎬 Merakit video latar Pexels & Teks...")
     audio = AudioFileClip(audio_path)
@@ -185,28 +265,22 @@ def render_short_video(bg_video_path, audio_path, item, output_video, index):
     
     overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.45).with_duration(video_duration)
     
-    font_style = get_custom_font()
-    
-    # Menggunakan TextClip otomatis tanpa parameter size untuk menghindari error broadcasting shape
-    txt_hook = TextClip(text=item['hook'], font=font_style, font_size=55, color='yellow', stroke_color='black', stroke_width=2.5, method='caption')
-    txt_hook = txt_hook.with_duration(video_duration).with_position(('center', 450))
-    
-    txt_isi = TextClip(text=item['isi'], font=font_style, font_size=50, color='white', stroke_color='black', stroke_width=2, method='caption')
-    txt_isi = txt_isi.with_duration(video_duration).with_position(('center', 650))
-    
-    txt_cta = TextClip(text=f"👇 {item['cta']}", font=font_style, font_size=45, color='cyan', stroke_color='black', stroke_width=2, method='caption')
-    txt_cta = txt_cta.with_duration(video_duration).with_position(('center', 1300))
+    txt_img_path = os.path.join(BASE_DIR, f"text_overlay_temp_{index}.png")
+    create_text_overlay_image(item, txt_img_path)
+    txt_clip = ImageClip(txt_img_path).with_duration(video_duration)
     
     progress_bar = ColorClip(size=(1080, 15), color=(255, 215, 0)).with_duration(video_duration)
     progress_bar = progress_bar.with_position(lambda t: (int(-1080 + (1080 * (t / video_duration))), 'bottom'))
 
-    video = CompositeVideoClip([video_clip, overlay, txt_hook, txt_isi, txt_cta, progress_bar]).with_audio(audio)
+    video = CompositeVideoClip([video_clip, overlay, txt_clip, progress_bar]).with_audio(audio)
     video.write_videofile(output_video, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
     
     try:
         video.close()
         audio.close()
         video_clip.close()
+        if os.path.exists(txt_img_path):
+            os.remove(txt_img_path)
     except Exception:
         pass
         
@@ -216,7 +290,7 @@ def render_short_video(bg_video_path, audio_path, item, output_video, index):
         
     return output_video, video_duration
 
-# --- 5. YOUTUBE UPLOADER ---
+# --- 6. YOUTUBE UPLOADER ---
 def upload_to_youtube(video_path, title, description, tags, index):
     print(f"[{index}/5] 🚀 Mengunggah ke YouTube...")
     creds = Credentials(token=None, refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"), token_uri="https://oauth2.googleapis.com/token", client_id=os.environ.get("YOUTUBE_CLIENT_ID"), client_secret=os.environ.get("YOUTUBE_CLIENT_SECRET"))
