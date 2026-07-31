@@ -164,11 +164,11 @@ def download_pexels_video(query, output_filename):
 # --- 3. AI NEURAL VOICE ---
 def generate_ai_voice(full_text, index, output_audio):
     print(f"[{index}/5] 🎙️ Menyuarakan naskah...")
-    command = f'edge-tts --voice id-ID-ArdiNeural --rate=-5% --text "{full_text}" --write-media "{output_audio}"'
+    command = f'edge-tts --voice id-ID-ArdiNeural --rate=-5% --text "{full_text}" --write-media {output_audio}'
     os.system(command)
     return output_audio
 
-# --- 4. EDITOR VIDEO CAPCUT STYLE (ANTI-ERROR TEXTCLIP SHAPE) ---
+# --- 4. EDITOR VIDEO CAPCUT STYLE (BEBAS ERROR SHAPE) ---
 def render_short_video(bg_video_path, audio_path, item, output_video, index):
     print(f"[{index}/5] 🎬 Merakit video latar Pexels & Teks...")
     audio = AudioFileClip(audio_path)
@@ -176,7 +176,6 @@ def render_short_video(bg_video_path, audio_path, item, output_video, index):
     
     video_clip = VideoFileClip(bg_video_path)
     
-    # Algoritma Looping Video jika durasinya kurang dari suara narator
     if video_clip.duration < video_duration:
         n_loops = int(video_duration // video_clip.duration) + 1
         video_clip = concatenate_videoclips([video_clip] * n_loops)
@@ -188,14 +187,14 @@ def render_short_video(bg_video_path, audio_path, item, output_video, index):
     
     font_style = get_custom_font()
     
-    # Menggunakan metode aman untuk TextClip agar terhindar dari error broadcasting shape (376,0)
-    txt_hook = TextClip(text=item['hook'], font=font_style, font_size=55, color='yellow', stroke_color='black', stroke_width=2.5, method='caption', size=(950, None))
+    # Menggunakan TextClip otomatis tanpa parameter size untuk menghindari error broadcasting shape
+    txt_hook = TextClip(text=item['hook'], font=font_style, font_size=55, color='yellow', stroke_color='black', stroke_width=2.5, method='caption')
     txt_hook = txt_hook.with_duration(video_duration).with_position(('center', 450))
     
-    txt_isi = TextClip(text=item['isi'], font=font_style, font_size=50, color='white', stroke_color='black', stroke_width=2, method='caption', size=(950, None))
+    txt_isi = TextClip(text=item['isi'], font=font_style, font_size=50, color='white', stroke_color='black', stroke_width=2, method='caption')
     txt_isi = txt_isi.with_duration(video_duration).with_position(('center', 650))
     
-    txt_cta = TextClip(text=f"👇 {item['cta']}", font=font_style, font_size=45, color='cyan', stroke_color='black', stroke_width=2, method='caption', size=(950, None))
+    txt_cta = TextClip(text=f"👇 {item['cta']}", font=font_style, font_size=45, color='cyan', stroke_color='black', stroke_width=2, method='caption')
     txt_cta = txt_cta.with_duration(video_duration).with_position(('center', 1300))
     
     progress_bar = ColorClip(size=(1080, 15), color=(255, 215, 0)).with_duration(video_duration)
@@ -204,7 +203,6 @@ def render_short_video(bg_video_path, audio_path, item, output_video, index):
     video = CompositeVideoClip([video_clip, overlay, txt_hook, txt_isi, txt_cta, progress_bar]).with_audio(audio)
     video.write_videofile(output_video, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
     
-    # Melepaskan file handle sistem
     try:
         video.close()
         audio.close()
@@ -212,7 +210,7 @@ def render_short_video(bg_video_path, audio_path, item, output_video, index):
     except Exception:
         pass
         
-    time.sleep(2) # Mencegah error disk-latency GitHub Actions
+    time.sleep(2)
     if not os.path.exists(output_video):
         raise Exception(f"File {output_video} gagal dibuat oleh MoviePy!")
         
@@ -253,7 +251,6 @@ if __name__ == "__main__":
             
             upload_to_youtube(video_file, JUDUL, DESKRIPSI, TAGS, i)
             
-            # SIMPAN KE MEMORI AGAR BESOK TIDAK DIULANG
             mark_hook_as_used(item['hook'])
             
             if i < len(selected_batch):
