@@ -3,6 +3,7 @@ import time
 import random
 import requests
 import urllib.parse
+import gc
 from groq import Groq
 from moviepy import AudioFileClip, VideoFileClip, CompositeVideoClip, ColorClip, ImageClip, concatenate_videoclips
 from PIL import Image, ImageDraw, ImageFont
@@ -49,9 +50,9 @@ def generate_dynamic_content(num_videos=5):
     
     Gunakan pemisah '---' antar naskah. Format wajib persis seperti ini:
     
-    HOOK: [1 kalimat pembuka yang sangat memancing emosi/penasaran]
+    HOOK: [1 kalimat pembuka yang sangat memancing emosi/penasaran, MAKSIMAL 4-5 KATA, HURUF KAPITAL SEMUA]
     ISI: [2-3 kalimat filosofis, mendalam, tentang kehidupan, lelah, penyembuhan luka, mental health, atau kedewasaan]
-    CTA: [Ajakan interaksi, misal: Bagikan ke temanmu yang butuh pelukan hangat.]
+    CTA: [Ajakan interaksi singkat, misal: Bagikan ke temanmu yang butuh pelukan hangat.]
     PEXELS_QUERY: [Kata kunci bahasa Inggris untuk mencari video background di Pexels yang SANGAT RELEVAN dengan isi naskah, contoh: "dark moody ocean waves crashing cliff", "foggy pine forest drone shot", "lonely person walking in rain cinematic"]
     """
     
@@ -165,17 +166,17 @@ def download_pexels_video(query, output_filename):
 # --- 3. AI NEURAL VOICE ---
 def generate_ai_voice(full_text, index, output_audio):
     print(f"[{index}/5] 🎙️ Menyuarakan naskah...")
-    command = f'edge-tts --voice id-ID-ArdiNeural --rate=-5% --text "{full_text}" --write-media {output_audio}'
+    command = f'edge-tts --voice id-ID-ArdiNeural --rate=-5% --text "{full_text}" --write-media "{output_audio}"'
     os.system(command)
     return output_audio
 
-# --- 4. TEXT OVERLAY GENERATOR (PILLOW ENGINE) ---
+# --- 4. TEXT OVERLAY GENERATOR (DYNAMIC FLOW LAYOUT) ---
 def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
     font_path = get_custom_font()
-    font_hook = ImageFont.truetype(font_path, 55)
+    font_hook = ImageFont.truetype(font_path, 60)
     font_isi = ImageFont.truetype(font_path, 45)
     font_cta = ImageFont.truetype(font_path, 42)
     
@@ -203,24 +204,28 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
 
     lines_hook = wrap_text(item['hook'], font_hook)
     lines_isi = wrap_text(item['isi'], font_isi)
-    lines_cta = [f"👇 {item['cta']}"]
+    lines_cta = wrap_text(f"👇 {item['cta']}", font_cta)
     
-    # 1. Render Hook (Warna Kuning, Posisi Y=450)
-    y = 450
+    # --- POSISI MENGALIR DINAMIS (DYNAMIC FLOW) ---
+    y = 420  # Mulai posisi Y awal untuk Hook
+
+    # 1. Render Hook (Warna Kuning)
     for line in lines_hook:
         try:
             w = draw.textlength(line, font=font_hook)
         except AttributeError:
             w = draw.textbbox((0, 0), line, font=font_hook)[2]
         x = (img_size[0] - w) // 2
-        # Outline Hitam
+        # Outline Hitam tebal
         for ax, ay in [(-3,0), (3,0), (0,-3), (0,3), (-3,-3), (3,3), (-3,3), (3,-3)]:
             draw.text((x + ax, y + ay), line, font=font_hook, fill="black")
         draw.text((x, y), line, font=font_hook, fill="yellow")
-        y += 70
+        y += 75  # Spasi antar baris hook
 
-    # 2. Render Isi Naskah (Warna Putih, Posisi Y=680)
-    y = 680
+    # Jarak aman dinamis antara Hook dan Isi Naskah (50px dari baris terakhir hook)
+    y += 50
+
+    # 2. Render Isi Naskah (Warna Putih)
     for line in lines_isi:
         try:
             w = draw.textlength(line, font=font_isi)
@@ -230,10 +235,10 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
         for ax, ay in [(-3,0), (3,0), (0,-3), (0,3), (-3,-3), (3,3), (-3,3), (3,-3)]:
             draw.text((x + ax, y + ay), line, font=font_isi, fill="black")
         draw.text((x, y), line, font=font_isi, fill="white")
-        y += 60
+        y += 60  # Spasi antar baris isi
 
-    # 3. Render CTA (Warna Cyan, Posisi Y=1350)
-    y = 1350
+    # 3. Render CTA (Warna Cyan, diposisikan secara konsisten di bagian bawah layar)
+    y_cta = 1450
     for line in lines_cta:
         try:
             w = draw.textlength(line, font=font_cta)
@@ -241,9 +246,9 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
             w = draw.textbbox((0, 0), line, font=font_cta)[2]
         x = (img_size[0] - w) // 2
         for ax, ay in [(-3,0), (3,0), (0,-3), (0,3), (-3,-3), (3,3), (-3,3), (3,-3)]:
-            draw.text((x + ax, y + ay), line, font=font_cta, fill="black")
-        draw.text((x, y), line, font=font_cta, fill="cyan")
-        y += 55
+            draw.text((x + ax, y_cta + ay), line, font=font_cta, fill="black")
+        draw.text((x, y_cta), line, font=font_cta, fill="cyan")
+        y_cta += 55
 
     img.save(output_path)
     return output_path
@@ -284,9 +289,9 @@ def render_short_video(bg_video_path, audio_path, item, output_video, index):
     except Exception:
         pass
         
-    time.sleep(2)
-    if not os.path.exists(output_video):
-        raise Exception(f"File {output_video} gagal dibuat oleh MoviePy!")
+    time.sleep(3)
+    if not os.path.exists(output_video) or os.path.getsize(output_video) < 50000:
+        raise Exception(f"File {output_video} gagal dibuat atau ukurannya korup/0 byte!")
         
     return output_video, video_duration
 
@@ -308,6 +313,7 @@ if __name__ == "__main__":
     
     for i, item in enumerate(selected_batch, 1):
         try:
+            print(f"--- MENGERJAKAN VIDEO {i} DARI 5 ---")
             suara_naskah = f"{item['hook']} {item['isi'].replace(chr(10), ' ')} {item['cta']}"
             video_bg_file = os.path.join(BASE_DIR, f"stock_bg_{i}.mp4")
             audio_file = os.path.join(BASE_DIR, f"voice_{i}.mp3")
@@ -327,9 +333,13 @@ if __name__ == "__main__":
             
             mark_hook_as_used(item['hook'])
             
+            # Pembersihan memori RAM secara paksa
+            gc.collect()
+            
             if i < len(selected_batch):
                 print("⏳ Jeda 15 detik untuk keamanan API YouTube...\n")
                 time.sleep(15)
                 
         except Exception as e:
             print(f"❌ Kesalahan pada video {i}: {e}\n")
+            gc.collect()
