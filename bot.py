@@ -3,34 +3,96 @@ import time
 import random
 import requests
 import urllib.parse
+import google.generativeai as genai
 from moviepy import AudioFileClip, TextClip, CompositeVideoClip, ImageClip, ColorClip
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# --- BANK NASKAH KELAS ATAS (MENYENTUH & FILOSOFIS) ---
-BANK_KONTEN = [
-    {"id": "V001", "hook": "TERUNTUK KAMU YANG SEDANG LELAH.", "isi": "Tidak apa-apa jika hari ini kamu tidak berlari kencang.\nBertahan dan tetap bernapas di tengah badai, sudah merupakan sebuah kemenangan yang luar biasa.", "cta": "Ketik 'SAYA KUAT' untuk berterima kasih pada dirimu sendiri.", "prompt_ai": "A solitary figure sitting on a bench looking at a peaceful glowing sunset over a calm ocean, cinematic, healing vibe"},
-    {"id": "V002", "hook": "BACA INI SEBELUM MENYERAH.", "isi": "Orang yang paling kuat bukanlah mereka yang tidak pernah menangis.\nTetapi mereka yang menangis di malam hari, namun tetap bangun di pagi hari untuk melanjutkan peperangan.", "cta": "Bagikan ke temanmu yang sedang butuh pelukan hangat.", "prompt_ai": "A beautiful sunrise emerging behind dark heavy rain clouds over a misty mountain, hope, epic lighting, highly detailed"},
-    {"id": "V003", "hook": "SADARKAH KAMU?", "isi": "Satu-satunya orang yang akan bersamamu dari lahir hingga akhir hayat, adalah dirimu sendiri.\nBerhentilah terlalu keras pada dirimu. Maafkanlah masa lalumu.", "cta": "Ketik 'AKU BERHARGA' jika kamu sepakat.", "prompt_ai": "A person looking at their own glowing reflection in a crystal clear magical lake, starry night, serene atmosphere"},
-    {"id": "V004", "hook": "RAHASIA KETENANGAN HIDUP.", "isi": "Terkadang, jawaban dari masalahmu bukanlah mencari jalan keluar.\nTapi menerima bahwa beberapa hal memang ditakdirkan terjadi, untuk mendewasakanmu.", "cta": "Simpan video ini untuk pengingat di kala sedih.", "prompt_ai": "A lone boat floating on a perfectly calm mirror-like river leading to a glowing giant moon, surreal, peaceful"},
-    {"id": "V005", "hook": "WAKTU TERUS BERJALAN.", "isi": "Jangan biarkan ketakutan akan kegagalan menahanmu.\nRasa sakit karena mencoba akan hilang dalam seminggu.\nTapi rasa sakit karena penasaran, akan menghantuimu seumur hidup.", "cta": "Ketik 'SIAP MELANGKAH' untuk memulai hal baru!", "prompt_ai": "An open doorway in a dark room leading to a bright, lush magical forest, stepping into the unknown, cinematic"},
-    {"id": "V006", "hook": "HENTIKAN SCROLLMU 15 DETIK.", "isi": "Kamu sudah terlalu banyak memikirkan kebahagiaan orang lain.\nHari ini, ambil waktu sejenak, dan tanyakan pada hatimu:\n'Apa yang sebenarnya membuatku bahagia?'", "cta": "Ketik jawabanmu di kolom komentar!", "prompt_ai": "A cozy warm glowing cabin in a snowy dark forest, safe haven, comforting atmospheric lighting, 8k"},
-    {"id": "V007", "hook": "FAKTA YANG MENYAKITKAN.", "isi": "Semakin kamu dewasa, lingkar pertemananmu akan semakin mengecil.\nItu bukan karena kamu sombong. Kamu hanya mulai mengerti bedanya antara kuantitas dan kualitas.", "cta": "Tag sahabat terbaikmu di komentar!", "prompt_ai": "Two glowing wolves standing together on a snowy cliff looking at a vast aurora borealis, loyalty, epic masterpiece"}
-]
+# --- KONFIGURASI GEMINI AI ---
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
 
-# --- MANAJEMEN MEMORI (ANTI DUPLIKASI) ---
-HISTORY_FILE = "history.txt"
+# --- MANAJEMEN MEMORI (ANTI DUPLIKASI KONTEN) ---
+HISTORY_FILE = "history_hooks.txt"
 
-def get_used_ids():
+def get_used_hooks():
+    """Mengambil riwayat naskah yang sudah pernah dibuat agar AI tidak mengulanginya"""
     if not os.path.exists(HISTORY_FILE):
         return []
-    with open(HISTORY_FILE, 'r') as f:
-        return [line.strip() for line in f.readlines()]
+    with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+        return [line.strip() for line in f.readlines() if line.strip()]
 
-def mark_id_as_used(video_id):
-    with open(HISTORY_FILE, 'a') as f:
-        f.write(f"{video_id}\n")
+def mark_hook_as_used(hook_text):
+    """Menyimpan hook baru ke dalam memori bot"""
+    with open(HISTORY_FILE, 'a', encoding='utf-8') as f:
+        f.write(f"{hook_text}\n")
+
+# --- 1. GEMINI AI: GENERATOR NASKAH TANPA BATAS ---
+def generate_dynamic_content(num_videos=5):
+    print(f"🕊️ Meminta Gemini AI meracik {num_videos} naskah baru yang belum pernah ada...")
+    
+    # Ambil 25 hook terakhir dari memori untuk memberi tahu AI apa yang harus dihindari
+    used_hooks = get_used_hooks()
+    history_context = "\n".join(used_hooks[-25:]) if used_hooks else "(Belum ada riwayat, buat topik bebas)"
+    
+    prompt = f"""
+    Bertindaklah sebagai penulis naskah video motivasi, psikologi, dan filosofis tingkat tinggi.
+    Buatlah {num_videos} naskah video pendek (YouTube Shorts) yang menyentuh hati, mendalam, dan *relatable*.
+    
+    ATURAN MUTLAK ANTI-DUPLIKASI: 
+    Dilarang keras membuat naskah dengan tema, pesan, atau kalimat pembuka (HOOK) yang mirip dengan daftar naskah yang sudah pernah dibuat ini:
+    {history_context}
+    
+    Gunakan pemisah '---' antar naskah. Format wajib persis seperti ini:
+    
+    HOOK: [1 kalimat pembuka yang sangat memancing emosi/penasaran]
+    ISI: [2-3 kalimat filosofis, mendalam, tentang kehidupan, lelah, penyembuhan luka, mental health, atau kedewasaan]
+    CTA: [Ajakan interaksi, misal: Bagikan ke temanmu yang butuh pelukan hangat.]
+    PROMPT_AI: [Deskripsi bahasa Inggris untuk AI Gambar. Bebas, kreatif, estetik, cinematic, moody. Contoh: Cinematic portrait of a lone boat on a magical glowing lake, misty, peace, 8k]
+    """
+    
+    model = genai.GenerativeModel('gemini-3.5-flash')
+    
+    raw_text = ""
+    for attempt in range(3):
+        try:
+            response = model.generate_content(prompt)
+            raw_text = response.text
+            break
+        except Exception as e:
+            print(f"⚠️ Error Gemini (Percobaan {attempt+1}/3): {e}")
+            time.sleep(65)
+    else:
+        raise Exception("❌ Gagal total menghubungi Gemini AI.")
+
+    batch = []
+    for i, chunk in enumerate(raw_text.split("---")):
+        if i >= num_videos: break
+        lines = [line.strip() for line in chunk.strip().split("\n") if line.strip()]
+        if not lines: continue
+        
+        hook = "TERUNTUK KAMU YANG LELAH."
+        isi = "Teruslah bernapas dan bertahan, kamu sudah melakukan yang terbaik hari ini."
+        cta = "Ketik Amin jika kamu percaya."
+        prompt_ai = "A solitary figure looking at a peaceful glowing sunset, cinematic"
+        
+        for line in lines:
+            if line.startswith("HOOK:"): hook = line.replace("HOOK:", "").strip()
+            elif line.startswith("ISI:"): isi = line.replace("ISI:", "").strip()
+            elif line.startswith("CTA:"): cta = line.replace("CTA:", "").strip()
+            elif line.startswith("PROMPT_AI:"): prompt_ai = line.replace("PROMPT_AI:", "").strip()
+                
+        batch.append({
+            "id": f"VID_{int(time.time())}_{i}",
+            "hook": hook,
+            "isi": isi,
+            "cta": cta,
+            "prompt_ai": prompt_ai
+        })
+        
+    print(f"✅ Berhasil meracik {len(batch)} Naskah Filosofis Unik!")
+    return batch
 
 # --- MENGUNDUH FONT PRO ---
 def get_custom_font():
@@ -50,7 +112,7 @@ def get_custom_font():
             raise Exception(f"Gagal mengunduh font. Status Code: {r.status_code}")
     return os.path.abspath(font_filename)
 
-# --- 1. AI IMAGE GENERATOR ---
+# --- 2. AI IMAGE GENERATOR ---
 def generate_ai_image(prompt, index, output_filename):
     print(f"[{index}/5] 🎨 Melukis visual AI...")
     full_prompt = f"{prompt}, dark moody aesthetic, vertical portrait, cinematic lighting, masterpiece"
@@ -65,14 +127,14 @@ def generate_ai_image(prompt, index, output_filename):
         return output_filename
     raise Exception("Gagal mengunduh gambar AI.")
 
-# --- 2. AI NEURAL VOICE ---
+# --- 3. AI NEURAL VOICE ---
 def generate_ai_voice(full_text, index, output_audio):
     print(f"[{index}/5] 🎙️ Menyuarakan naskah...")
     command = f'edge-tts --voice id-ID-ArdiNeural --rate=-5% --text "{full_text}" --write-media {output_audio}'
     os.system(command)
     return output_audio
 
-# --- 3. EDITOR VIDEO ALA CAPCUT ---
+# --- 4. EDITOR VIDEO ALA CAPCUT ---
 def render_short_video(bg_image_path, audio_path, item, output_video, index):
     print(f"[{index}/5] 🎬 Merakit video CapCut Style...")
     audio = AudioFileClip(audio_path)
@@ -92,17 +154,14 @@ def render_short_video(bg_image_path, audio_path, item, output_video, index):
     txt_cta = TextClip(text=f"👇 {item['cta']}", font=font_style, font_size=45, color='cyan', stroke_color='black', stroke_width=2, size=(950, None), method='caption', text_align='center')
     txt_cta = txt_cta.with_duration(video_duration).with_position(('center', 1300))
     
-    # 4. Progress Bar Estetik (Perbaikan Animasi MoviePy v2)
-    # Membuat bar kuning penuh sepanjang layar
     progress_bar = ColorClip(size=(1080, 15), color=(255, 215, 0)).with_duration(video_duration)
-    # Menganimasikan posisi bergeser: Mulai dari luar layar (-1080) menuju kanan (0)
     progress_bar = progress_bar.with_position(lambda t: (int(-1080 + (1080 * (t / video_duration))), 'bottom'))
 
     video = CompositeVideoClip([bg_clip, overlay, txt_hook, txt_isi, txt_cta, progress_bar]).with_audio(audio)
     video.write_videofile(output_video, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
     return output_video, video_duration
 
-# --- 4. YOUTUBE UPLOADER ---
+# --- 5. YOUTUBE UPLOADER ---
 def upload_to_youtube(video_path, title, description, tags, index):
     print(f"[{index}/5] 🚀 Mengunggah ke YouTube...")
     creds = Credentials(token=None, refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"), token_uri="https://oauth2.googleapis.com/token", client_id=os.environ.get("YOUTUBE_CLIENT_ID"), client_secret=os.environ.get("YOUTUBE_CLIENT_SECRET"))
@@ -114,14 +173,9 @@ def upload_to_youtube(video_path, title, description, tags, index):
 
 # --- MAIN LOOP ---
 if __name__ == "__main__":
-    used_ids = get_used_ids()
-    available_content = [c for c in BANK_KONTEN if c['id'] not in used_ids]
+    # Generator dinamis pengganti Bank Konten (Buat 5 video)
+    selected_batch = generate_dynamic_content(num_videos=5)
     
-    if not available_content:
-        print("⚠️ Semua naskah di Bank Konten sudah digunakan! Silakan tambahkan naskah baru ke bot.py.")
-        exit()
-        
-    selected_batch = available_content[:5]
     print(f"⚡ MEMPROSES {len(selected_batch)} VIDEO BARU ⚡\n")
     
     for i, item in enumerate(selected_batch, 1):
@@ -131,7 +185,7 @@ if __name__ == "__main__":
             audio_file = f"voice_{i}.mp3"
             video_file = f"short_{i}.mp4"
             
-            clean_hook = item['hook'].replace('.', '')
+            clean_hook = item['hook'].replace('.', '').replace('"', '')
             JUDUL = f"{clean_hook} 💡 #shorts #motivasi #renungan"
             if len(JUDUL) > 100: JUDUL = JUDUL[:90] + " #shorts"
             DESKRIPSI = f"{item['isi']}\n\n{item['cta']}\n\n#motivasi #renungan #inspirasi #shorts #mindset #psikologi #katabijak"
@@ -142,11 +196,13 @@ if __name__ == "__main__":
             _, durasi = render_short_video(img_file, audio_file, item, video_file, i)
             
             upload_to_youtube(video_file, JUDUL, DESKRIPSI, TAGS, i)
-            mark_id_as_used(item['id'])
+            
+            # SIMPAN KE MEMORI AGAR BESOK TIDAK DIULANG
+            mark_hook_as_used(item['hook'])
             
             if i < len(selected_batch):
                 print("⏳ Jeda 15 detik untuk keamanan API YouTube...\n")
                 time.sleep(15)
                 
         except Exception as e:
-            print(f"❌ Kesalahan pada video {item['id']}: {e}\n")
+            print(f"❌ Kesalahan pada video {i}: {e}\n")
