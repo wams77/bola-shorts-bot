@@ -3,15 +3,15 @@ import time
 import random
 import requests
 import urllib.parse
-import google.generativeai as genai
+from groq import Groq
 from moviepy import AudioFileClip, TextClip, CompositeVideoClip, ImageClip, ColorClip
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-# --- KONFIGURASI GEMINI AI ---
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-genai.configure(api_key=GEMINI_API_KEY)
+# --- KONFIGURASI GROQ AI ---
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+groq_client = Groq(api_key=GROQ_API_KEY)
 
 # --- MANAJEMEN MEMORI (ANTI DUPLIKASI KONTEN) ---
 HISTORY_FILE = "history_hooks.txt"
@@ -28,9 +28,9 @@ def mark_hook_as_used(hook_text):
     with open(HISTORY_FILE, 'a', encoding='utf-8') as f:
         f.write(f"{hook_text}\n")
 
-# --- 1. GEMINI AI: GENERATOR NASKAH TANPA BATAS ---
+# --- 1. GROQ AI: GENERATOR NASKAH TANPA BATAS (LLAMA-3.3) ---
 def generate_dynamic_content(num_videos=5):
-    print(f"🕊️ Meminta Gemini AI meracik {num_videos} naskah baru yang belum pernah ada...")
+    print(f"🕊️ Meminta Groq Llama-3.3 meracik {num_videos} naskah baru yang belum pernah ada...")
     
     # Ambil 25 hook terakhir dari memori untuk memberi tahu AI apa yang harus dihindari
     used_hooks = get_used_hooks()
@@ -38,7 +38,7 @@ def generate_dynamic_content(num_videos=5):
     
     prompt = f"""
     Bertindaklah sebagai penulis naskah video motivasi, psikologi, dan filosofis tingkat tinggi.
-    Buatlah {num_videos} naskah video pendek (YouTube Shorts) yang menyentuh hati, mendalam, dan *relatable*.
+    Buatlah {num_videos} naskah video pendek (YouTube Shorts) yang menyentuh hati, mendalam, dan relatable.
     
     ATURAN MUTLAK ANTI-DUPLIKASI: 
     Dilarang keras membuat naskah dengan tema, pesan, atau kalimat pembuka (HOOK) yang mirip dengan daftar naskah yang sudah pernah dibuat ini:
@@ -52,19 +52,25 @@ def generate_dynamic_content(num_videos=5):
     PROMPT_AI: [Deskripsi bahasa Inggris untuk AI Gambar. Bebas, kreatif, estetik, cinematic, moody. Contoh: Cinematic portrait of a lone boat on a magical glowing lake, misty, peace, 8k]
     """
     
-    model = genai.GenerativeModel('gemini-3.5-flash')
-    
     raw_text = ""
     for attempt in range(3):
         try:
-            response = model.generate_content(prompt)
-            raw_text = response.text
+            chat_completion = groq_client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": "Anda adalah asisten AI penulis naskah yang patuh pada format instruksi."},
+                    {"role": "user", "content": prompt}
+                ],
+                model="llama-3.3-70b-versatile",
+                temperature=0.7,
+                max_tokens=2048,
+            )
+            raw_text = chat_completion.choices[0].message.content
             break
         except Exception as e:
-            print(f"⚠️ Error Gemini (Percobaan {attempt+1}/3): {e}")
-            time.sleep(65)
+            print(f"⚠️ Error Groq (Percobaan {attempt+1}/3): {e}")
+            time.sleep(15)
     else:
-        raise Exception("❌ Gagal total menghubungi Gemini AI.")
+        raise Exception("❌ Gagal total menghubungi Groq AI.")
 
     batch = []
     for i, chunk in enumerate(raw_text.split("---")):
@@ -91,7 +97,7 @@ def generate_dynamic_content(num_videos=5):
             "prompt_ai": prompt_ai
         })
         
-    print(f"✅ Berhasil meracik {len(batch)} Naskah Filosofis Unik!")
+    print(f"✅ Berhasil meracik {len(batch)} Naskah Filosofis Unik via Groq!")
     return batch
 
 # --- MENGUNDUH FONT PRO ---
@@ -173,7 +179,6 @@ def upload_to_youtube(video_path, title, description, tags, index):
 
 # --- MAIN LOOP ---
 if __name__ == "__main__":
-    # Generator dinamis pengganti Bank Konten (Buat 5 video)
     selected_batch = generate_dynamic_content(num_videos=5)
     
     print(f"⚡ MEMPROSES {len(selected_batch)} VIDEO BARU ⚡\n")
