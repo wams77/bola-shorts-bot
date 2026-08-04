@@ -32,7 +32,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install edge-tts moviepy requests google-api-python-client google-auth-oauthlib google-auth-httplib2 groq pillow
+          pip install edge-tts moviepy==1.0.3 requests google-api-python-client google-auth-oauthlib google-auth-httplib2 groq pillow
 
       - name: Eksekusi Bot Produksi
         env:
@@ -50,10 +50,10 @@ jobs:
           git config --global user.name 'Bot Editor AI'
           git config --global user.email 'bot@actions.github.com'
           
-          # Menyesuaikan nama file dengan script Python yang baru (history_hooks.txt)
-          touch history_hooks.txt 
+          # Memastikan file history.txt ada
+          touch history.txt 
           
-          git add history_hooks.txt
-          # Hanya commit jika ada perubahan di memori
-          git diff --quiet && git diff --staged --quiet || git commit -m "update memori video AI"
-          git push
+          git add history.txt
+          
+          # Hanya commit & push jika ada perubahan pada history.txt, jika tidak ada lewati dengan aman
+          git diff --quiet && git diff --staged --quiet || (git commit -m "update memori video Stoic" && git push)
