@@ -3,78 +3,51 @@ import time
 import random
 import requests
 import urllib.parse
-import gc
-from groq import Groq
-from moviepy import AudioFileClip, VideoFileClip, CompositeVideoClip, ColorClip, ImageClip, concatenate_videoclips
-from PIL import Image, ImageDraw, ImageFont
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+import asyncio
+import edge_tts
+import google.generativeai as genai
+from moviepy import AudioFileClip, CompositeAudioClip, CompositeVideoClip, ColorClip, ImageClip, VideoFileClip, concatenate_audioclips, concatenate_videoclips
+from moviepy.audio.fx import MultiplyVolume
 
-# Mengunci direktori kerja agar file tidak "nyasar"
 BASE_DIR = os.path.abspath(os.getcwd())
 
-# --- KONFIGURASI GROQ AI ---
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-groq_client = Groq(api_key=GROQ_API_KEY)
+# Konfigurasi Gemini API
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
 
-# --- MANAJEMEN MEMORI (ANTI DUPLIKASI KONTEN) ---
-HISTORY_FILE = "history_hooks.txt"
+# PEXELS API KEY (Untuk mengambil video latar belakang sepak bola gratis)
+PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
 
-def get_used_hooks():
-    """Mengambil riwayat naskah yang sudah pernah dibuat agar AI tidak mengulanginya"""
-    if not os.path.exists(HISTORY_FILE):
-        return []
-    with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
-        return [line.strip() for line in f.readlines() if line.strip()]
-
-def mark_hook_as_used(hook_text):
-    """Menyimpan hook baru ke dalam memori bot"""
-    with open(HISTORY_FILE, 'a', encoding='utf-8') as f:
-        f.write(f"{hook_text}\n")
-
-# --- 1. GROQ AI: GENERATOR NASKAH + QUERY PEXELS ---
-def generate_dynamic_content(num_videos=5):
-    print(f"🕊️ Meminta Groq Llama-3.3 meracik {num_videos} naskah & kueri video Pexels...")
-    
-    used_hooks = get_used_hooks()
-    history_context = "\n".join(used_hooks[-25:]) if used_hooks else "(Belum ada riwayat, buat topik bebas)"
+# ==========================================
+# 1. GEMINI AI: GENERATOR NASKAH SEPAK BOLA
+# ==========================================
+def generate_football_script(num_videos=3):
+    print(f"⚽ Meminta Gemini AI meracik {num_videos} naskah YouTube Shorts Sepak Bola...")
     
     prompt = f"""
-    Bertindaklah sebagai penulis naskah video motivasi, psikologi, dan filosofis tingkat tinggi.
-    Buatlah {num_videos} naskah video pendek (YouTube Shorts) yang menyentuh hati, mendalam, dan relatable.
+    Bertindaklah sebagai konten kreator YouTube Shorts sepak bola profesional yang antusias dan paham statistik bola.
+    Buatlah {num_videos} naskah video pendek (durasi 30-40 detik) tentang fakta menarik, sejarah, atau rivalitas epik di dunia sepak bola.
+    Gunakan pemisah '---' antar naskah. Format persis seperti ini:
     
-    ATURAN MUTLAK ANTI-DUPLIKASI: 
-    Dilarang keras membuat naskah dengan tema, pesan, atau kalimat pembuka (HOOK) yang mirip dengan daftar naskah yang sudah pernah dibuat ini:
-    {history_context}
-    
-    Gunakan pemisah '---' antar naskah. Format wajib persis seperti ini:
-    
-    HOOK: [1 kalimat pembuka yang sangat memancing emosi/penasaran, MAKSIMAL 4-5 KATA, HURUF KAPITAL SEMUA]
-    ISI: [2-3 kalimat filosofis, mendalam, tentang kehidupan, lelah, penyembuhan luka, mental health, atau kedewasaan]
-    CTA: [Ajakan interaksi singkat, misal: Bagikan ke temanmu yang butuh pelukan hangat.]
-    PEXELS_QUERY: [Kata kunci bahasa Inggris untuk mencari video background di Pexels yang SANGAT RELEVAN dengan isi naskah, contoh: "dark moody ocean waves crashing cliff", "foggy pine forest drone shot", "lonely person walking in rain cinematic"]
+    JUDUL: [Judul video yang clickbait dan menarik, max 60 karakter]
+    NASKAH: [Naskah suara yang seru, dinamis, dan padat. Tanpa jeda waktu, langsung isi naskah narasi]
+    PENCARIAN_VIDEO: [Kata kunci bahasa Inggris untuk mencari video Pexels, misal: "football skills match stadium", "soccer player celebration", atau "stadium crowd cheering"]
     """
     
+    model = genai.GenerativeModel('gemini-3.5-flash')
+    
     raw_text = ""
-    for attempt in range(3):
+    max_retries = 3
+    for attempt in range(max_retries):
         try:
-            chat_completion = groq_client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": "Anda adalah asisten AI penulis naskah yang patuh pada format instruksi."},
-                    {"role": "user", "content": prompt}
-                ],
-                model="llama-3.3-70b-versatile",
-                temperature=0.7,
-                max_tokens=2048,
-            )
-            raw_text = chat_completion.choices[0].message.content
-            break
+            response = model.generate_content(prompt)
+            raw_text = response.text
+            break 
         except Exception as e:
-            print(f"⚠️ Error Groq (Percobaan {attempt+1}/3): {e}")
-            time.sleep(15)
+            print(f"⚠️ Error Gemini (Percobaan {attempt+1}): {e}")
+            time.sleep(65)
     else:
-        raise Exception("❌ Gagal total menghubungi Groq AI.")
+        raise Exception("❌ Gagal terhubung ke Gemini AI.")
 
     batch = []
     for i, chunk in enumerate(raw_text.split("---")):
@@ -82,264 +55,195 @@ def generate_dynamic_content(num_videos=5):
         lines = [line.strip() for line in chunk.strip().split("\n") if line.strip()]
         if not lines: continue
         
-        hook = "TERUNTUK KAMU YANG LELAH."
-        isi = "Teruslah bernapas dan bertahan, kamu sudah melakukan yang terbaik hari ini."
-        cta = "Ketik Amin jika kamu percaya."
-        pexels_query = "dark moody nature cinematic drone shot"
-        
+        judul, naskah, keyword = "Fakta Unik Sepak Bola Dunia", "Tahukah kamu fakta menarik tentang sepak bola?", "football match stadium"
         for line in lines:
-            if line.startswith("HOOK:"): hook = line.replace("HOOK:", "").strip()
-            elif line.startswith("ISI:"): isi = line.replace("ISI:", "").strip()
-            elif line.startswith("CTA:"): cta = line.replace("CTA:", "").strip()
-            elif line.startswith("PEXELS_QUERY:"): pexels_query = line.replace("PEXELS_QUERY:", "").strip()
+            if line.startswith("JUDUL:"): judul = line.replace("JUDUL:", "").strip()
+            if line.startswith("NASKAH:"): naskah = line.replace("NASKAH:", "").strip()
+            if line.startswith("PENCARIAN_VIDEO:"): keyword = line.replace("PENCARIAN_VIDEO:", "").strip()
                 
         batch.append({
-            "id": f"VID_{int(time.time())}_{i}",
-            "hook": hook,
-            "isi": isi,
-            "cta": cta,
-            "pexels_query": pexels_query
+            "id": f"FB_{int(time.time())}_{i}",
+            "judul": judul,
+            "naskah": naskah,
+            "keyword": keyword
         })
-        
-    print(f"✅ Berhasil meracik {len(batch)} Naskah & Kueri Pexels Unik!")
+    print(f"✅ Berhasil meracik {len(batch)} Naskah Sepak Bola!")
     return batch
 
-# --- MENGUNDUH FONT PRO ---
-def get_custom_font():
-    font_filename = os.path.join(BASE_DIR, "Montserrat-Black.ttf")
-    if os.path.exists(font_filename) and os.path.getsize(font_filename) < 100000:
-        os.remove(font_filename)
-        
-    if not os.path.exists(font_filename):
-        print("📥 Mengunduh Font Estetik (Montserrat Black)...")
-        url = "https://raw.githubusercontent.com/JulietaUla/Montserrat/master/fonts/ttf/Montserrat-Black.ttf"
-        r = requests.get(url)
-        if r.status_code == 200:
-            with open(font_filename, 'wb') as f:
-                f.write(r.content)
-            print("✅ Font berhasil diunduh dengan sempurna!")
-        else:
-            raise Exception(f"Gagal mengunduh font. Status Code: {r.status_code}")
-    return os.path.abspath(font_filename)
-
-# --- 2. PEXELS VIDEO BACKGROUND DOWNLOADER DENGAN VALIDASI ---
-def download_pexels_video(query, output_filename):
-    print(f"🎬 Mencari video latar relevan di Pexels untuk: '{query}'...")
-    api_key = os.environ.get("PEXELS_API_KEY")
-    headers = {"Authorization": api_key}
+# ==========================================
+# 2. PEXELS API: MENGUNDUH VIDEO SEPAK BOLA
+# ==========================================
+def download_pexels_video(keyword, output_filename):
+    print(f"📥 Mencari video latar belakang dengan kata kunci: '{keyword}'...")
+    headers = {"Authorization": PEXELS_API_KEY}
+    url = f"https://api.pexels.com/videos/search?query={urllib.parse.quote(keyword)}&per_page=5&orientation=portrait"
     
-    url = f"https://api.pexels.com/videos/search?query={urllib.parse.quote(query)}&orientation=portrait&per_page=5"
-    
-    try:
-        response = requests.get(url, headers=headers, timeout=15).json()
-        if "videos" in response and len(response["videos"]) > 0:
-            video_obj = random.choice(response["videos"])
-            video_files = video_obj["video_files"]
-            hd_file = next((v for v in video_files if v["quality"] == "hd"), video_files[0])
-            video_url = hd_file["link"]
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        videos = data.get("videos", [])
+        if videos:
+            # Pilih video acak dari hasil pencarian
+            selected_video = random.choice(videos)
+            video_files = selected_video.get("video_files", [])
             
-            vid_data = requests.get(video_url, timeout=30).content
-            with open(output_filename, 'wb') as f:
-                f.write(vid_data)
+            # Cari kualitas HD atau SD vertikal
+            hd_files = [v for v in video_files if v.get("width") and v.get("width") <= 1080]
+            if hd_files:
+                download_url = hd_files[0]["link"]
+            else:
+                download_url = video_files[0]["link"]
                 
+            print(f"   -> Mengunduh video Pexels...")
+            # Tambahkan User-Agent agar CDN Pexels tidak memblokir file
+            dl_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            v_data = requests.get(download_url, headers=dl_headers, stream=True)
+            
+            with open(output_filename, 'wb') as f:
+                for chunk in v_data.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            
+            # Validasi Ukuran File Pexels (> 50KB)
             if os.path.exists(output_filename) and os.path.getsize(output_filename) > 50000:
-                print("✅ Stok video Pexels berhasil diunduh dan divalidasi!")
                 return output_filename
-    except Exception as e:
-        print(f"⚠️ Peringatan unduhan Pexels: {e}")
+            else:
+                raise Exception("File video Pexels yang diunduh korup atau 0 byte.")
+                
+    raise Exception("Gagal mengunduh video dari Pexels API.")
 
-    # Fallback aman jika gagal/korup
-    print("⚠️ Menggunakan video latar cadangan universal yang aman...")
-    fallback_url = "https://api.pexels.com/videos/search?query=nature+landscape+drone&orientation=portrait&per_page=1"
-    fallback_res = requests.get(fallback_url, headers=headers).json()
+# ==========================================
+# 3. EDGE-TTS NATIVE (SUARA NARATOR BERSEMANGAT)
+# ==========================================
+async def _generate_audio_async(text, output_audio):
+    # Menggunakan suara Indonesia 'ArdiNeural' dengan kecepatan +5% agar bersemangat
+    communicate = edge_tts.Communicate(text, "id-ID-ArdiNeural", rate="+5%")
+    await communicate.save(output_audio)
+
+def generate_voiceover(text, output_audio):
+    print("🎙️ Merekam suara narator sepak bola...")
+    asyncio.run(_generate_audio_async(text, output_audio))
     
-    if "videos" in fallback_res and len(fallback_res["videos"]) > 0:
-        video_obj = fallback_res["videos"][0]
-        hd_file = video_obj["video_files"][0]
-        vid_data = requests.get(hd_file["link"], timeout=30).content
-        with open(output_filename, 'wb') as f:
-            f.write(vid_data)
-        return output_filename
+    # Validasi Ukuran File Audio (> 1KB)
+    if not os.path.exists(output_audio) or os.path.getsize(output_audio) < 1000:
+        raise Exception("File audio gagal dibuat atau kosong!")
         
-    raise Exception("Gagal total mengunduh video dari Pexels API.")
-
-# --- 3. AI NEURAL VOICE ---
-def generate_ai_voice(full_text, index, output_audio):
-    print(f"[{index}/5] 🎙️ Menyuarakan naskah...")
-    command = f'edge-tts --voice id-ID-ArdiNeural --rate=-5% --text "{full_text}" --write-media "{output_audio}"'
-    os.system(command)
     return output_audio
 
-# --- 4. TEXT OVERLAY GENERATOR (DYNAMIC FLOW LAYOUT) ---
-def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
-    img = Image.new("RGBA", img_size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
+# ==========================================
+# 4. EDITOR VIDEO (MOVIEPY)
+# ==========================================
+def render_shorts_video(video_bg_path, voice_path, output_video):
+    print("🎬 Merakit video YouTube Shorts...")
     
-    font_path = get_custom_font()
-    font_hook = ImageFont.truetype(font_path, 60)
-    font_isi = ImageFont.truetype(font_path, 45)
-    font_cta = ImageFont.truetype(font_path, 42)
+    # Keamanan Tambahan: Periksa input sebelum MoviePy berjalan
+    if not os.path.exists(video_bg_path) or os.path.getsize(video_bg_path) == 0:
+        raise Exception("Video latar belakang hilang atau korup sebelum dirender.")
+    if not os.path.exists(voice_path) or os.path.getsize(voice_path) == 0:
+        raise Exception("File suara hilang atau korup sebelum dirender.")
+
+    voice_clip = AudioFileClip(voice_path)
+    target_duration = voice_clip.duration + 1.5
     
-    max_width = img_size[0] - 120  # Margin 60px kiri-kanan
+    # Muat video latar belakang
+    video_clip = VideoFileClip(video_bg_path)
     
-    def wrap_text(text, font):
-        words = text.split()
-        lines = []
-        current_line = ""
-        for word in words:
-            test_line = f"{current_line} {word}".strip()
-            try:
-                w_test = draw.textlength(test_line, font=font)
-            except AttributeError:
-                w_test = draw.textbbox((0, 0), test_line, font=font)[2]
-                
-            if w_test <= max_width:
-                current_line = test_line
-            else:
-                lines.append(current_line)
-                current_line = word
-        if current_line:
-            lines.append(current_line)
-        return lines
-
-    lines_hook = wrap_text(item['hook'], font_hook)
-    lines_isi = wrap_text(item['isi'], font_isi)
-    lines_cta = wrap_text(f"👇 {item['cta']}", font_cta)
-    
-    # --- POSISI MENGALIR DINAMIS (DYNAMIC FLOW) ---
-    y = 420  # Mulai posisi Y awal untuk Hook
-
-    # 1. Render Hook (Warna Kuning)
-    for line in lines_hook:
-        try:
-            w = draw.textlength(line, font=font_hook)
-        except AttributeError:
-            w = draw.textbbox((0, 0), line, font=font_hook)[2]
-        x = (img_size[0] - w) // 2
-        # Outline Hitam tebal
-        for ax, ay in [(-3,0), (3,0), (0,-3), (0,3), (-3,-3), (3,3), (-3,3), (3,-3)]:
-            draw.text((x + ax, y + ay), line, font=font_hook, fill="black")
-        draw.text((x, y), line, font=font_hook, fill="yellow")
-        y += 75  # Spasi antar baris hook
-
-    # Jarak aman dinamis antara Hook dan Isi Naskah (50px dari baris terakhir hook)
-    y += 50
-
-    # 2. Render Isi Naskah (Warna Putih)
-    for line in lines_isi:
-        try:
-            w = draw.textlength(line, font=font_isi)
-        except AttributeError:
-            w = draw.textbbox((0, 0), line, font=font_isi)[2]
-        x = (img_size[0] - w) // 2
-        for ax, ay in [(-3,0), (3,0), (0,-3), (0,3), (-3,-3), (3,3), (-3,3), (3,-3)]:
-            draw.text((x + ax, y + ay), line, font=font_isi, fill="black")
-        draw.text((x, y), line, font=font_isi, fill="white")
-        y += 60  # Spasi antar baris isi
-
-    # 3. Render CTA (Warna Cyan, diposisikan secara konsisten di bagian bawah layar)
-    y_cta = 1450
-    for line in lines_cta:
-        try:
-            w = draw.textlength(line, font=font_cta)
-        except AttributeError:
-            w = draw.textbbox((0, 0), line, font=font_cta)[2]
-        x = (img_size[0] - w) // 2
-        for ax, ay in [(-3,0), (3,0), (0,-3), (0,3), (-3,-3), (3,3), (-3,3), (3,-3)]:
-            draw.text((x + ax, y_cta + ay), line, font=font_cta, fill="black")
-        draw.text((x, y_cta), line, font=font_cta, fill="cyan")
-        y_cta += 55
-
-    img.save(output_path)
-    return output_path
-
-# --- 5. EDITOR VIDEO UTAMA ---
-def render_short_video(bg_video_path, audio_path, item, output_video, index):
-    print(f"[{index}/5] 🎬 Merakit video latar Pexels & Teks...")
-    audio = AudioFileClip(audio_path)
-    video_duration = audio.duration + 1.5 
-    
-    video_clip = VideoFileClip(bg_video_path)
-    
-    if video_clip.duration < video_duration:
-        n_loops = int(video_duration // video_clip.duration) + 1
+    # Loop video jika durasinya lebih pendek dari suara narator
+    if video_clip.duration < target_duration:
+        n_loops = int(target_duration // video_clip.duration) + 1
         video_clip = concatenate_videoclips([video_clip] * n_loops)
         
-    video_clip = video_clip.subclipped(0, video_duration)
-    video_clip = video_clip.resized(height=1920).cropped(x_center=video_clip.w/2, y_center=video_clip.h/2, width=1080, height=1920)
+    video_clip = video_clip.subclipped(0, target_duration)
     
-    overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.45).with_duration(video_duration)
+    # Resize & crop ke format vertikal Shorts (1080x1920)
+    w, h = video_clip.size
+    target_ratio = 9 / 16
+    current_ratio = w / h
     
-    txt_img_path = os.path.join(BASE_DIR, f"text_overlay_temp_{index}.png")
-    create_text_overlay_image(item, txt_img_path)
-    txt_clip = ImageClip(txt_img_path).with_duration(video_duration)
-    
-    progress_bar = ColorClip(size=(1080, 15), color=(255, 215, 0)).with_duration(video_duration)
-    progress_bar = progress_bar.with_position(lambda t: (int(-1080 + (1080 * (t / video_duration))), 'bottom'))
-
-    video = CompositeVideoClip([video_clip, overlay, txt_clip, progress_bar]).with_audio(audio)
-    video.write_videofile(output_video, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
-    
-    try:
-        video.close()
-        audio.close()
-        video_clip.close()
-        if os.path.exists(txt_img_path):
-            os.remove(txt_img_path)
-    except Exception:
-        pass
+    if current_ratio > target_ratio:
+        new_w = int(h * target_ratio)
+        x_center = (w - new_w) / 2
+        video_clip = video_clip.cropped(x1=x_center, y1=0, x2=x_center + new_w, y2=h)
+    else:
+        new_h = int(w / target_ratio)
+        y_center = (h - new_h) / 2
+        video_clip = video_clip.cropped(x1=0, y1=y_center, x2=w, y2=y_center + new_h)
         
-    time.sleep(3)
-    if not os.path.exists(output_video) or os.path.getsize(output_video) < 50000:
+    video_clip = video_clip.resized((1080, 1920))
+    
+    # Tambahkan background musik (opsional, jika ada file bgm.mp3)
+    final_audio = voice_clip
+    bgm_file = os.path.join(BASE_DIR, "bgm.mp3")
+    if os.path.exists(bgm_file):
+        bgm_clip = AudioFileClip(bgm_file).with_effects([MultiplyVolume(0.1)])
+        if bgm_clip.duration < target_duration:
+            n_loops = int(target_duration // bgm_clip.duration) + 1
+            bgm_clip = concatenate_audioclips([bgm_clip] * n_loops)
+        bgm_clip = bgm_clip.subclipped(0, target_duration)
+        final_audio = CompositeAudioClip([bgm_clip, voice_clip.with_start(0)])
+        
+    final_video = video_clip.with_audio(final_audio)
+    
+    # Tulis video ke file
+    try:
+        final_video.write_videofile(
+            output_video, 
+            fps=24, 
+            codec="libx264", 
+            audio_codec="aac", 
+            preset="ultrafast",
+            threads=4
+        )
+    except Exception as e:
+        print(f"⚠️ Terjadi error saat FFmpeg menulis file: {e}")
+        
+    # Tutup object di memori secara aman
+    try:
+        final_video.close(); voice_clip.close(); video_clip.close()
+        if os.path.exists(bgm_file) and 'bgm_clip' in locals():
+            bgm_clip.close()
+    except Exception: 
+        pass
+    
+    time.sleep(3) # Beri waktu OS untuk menulis file ke disk
+    
+    # Validasi Hasil Akhir Render
+    file_size = os.path.getsize(output_video) if os.path.exists(output_video) else 0
+    print(f"📁 Ukuran file hasil render: {file_size} bytes")
+    
+    if file_size < 50000:
+        if os.path.exists(output_video):
+            os.remove(output_video)
         raise Exception(f"File {output_video} gagal dibuat atau ukurannya korup/0 byte!")
         
-    return output_video, video_duration
+    return output_video
 
-# --- 6. YOUTUBE UPLOADER ---
-def upload_to_youtube(video_path, title, description, tags, index):
-    print(f"[{index}/5] 🚀 Mengunggah ke YouTube...")
-    creds = Credentials(token=None, refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"), token_uri="https://oauth2.googleapis.com/token", client_id=os.environ.get("YOUTUBE_CLIENT_ID"), client_secret=os.environ.get("YOUTUBE_CLIENT_SECRET"))
-    youtube = build('youtube', 'v3', credentials=creds)
-    body = {"snippet": {"title": title, "description": description, "tags": tags, "categoryId": "27"}, "status": {"privacyStatus": "public", "selfDeclaredMadeForKids": False}}
-    media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
-    response = youtube.videos().insert(part="snippet,status", body=body, media_body=media).execute()
-    print(f"[{index}/5] 🎉 BERHASIL! Link: https://youtu.be/{response['id']}\n")
-
-# --- MAIN LOOP ---
+# ==========================================
+# EKSEKUTOR UTAMA
+# ==========================================
 if __name__ == "__main__":
-    selected_batch = generate_dynamic_content(num_videos=5)
+    JUMLAH_VIDEO = 3
+    print(f"⚽ MEMULAI BOT YOUTUBE SHORTS SEPAK BOLA ({JUMLAH_VIDEO} VIDEO) ⚽\n")
     
-    print(f"⚡ MEMPROSES {len(selected_batch)} VIDEO BARU ⚡\n")
+    batch = generate_football_script(JUMLAH_VIDEO)
     
-    for i, item in enumerate(selected_batch, 1):
+    for i, item in enumerate(batch, 1):
         try:
-            print(f"--- MENGERJAKAN VIDEO {i} DARI 5 ---")
-            suara_naskah = f"{item['hook']} {item['isi'].replace(chr(10), ' ')} {item['cta']}"
-            video_bg_file = os.path.join(BASE_DIR, f"stock_bg_{i}.mp4")
-            audio_file = os.path.join(BASE_DIR, f"voice_{i}.mp3")
-            video_file = os.path.join(BASE_DIR, f"short_{i}.mp4")
+            print(f"--- MENGERJAKAN VIDEO {i} DARI {len(batch)}: {item['judul']} ---")
             
-            clean_hook = item['hook'].replace('.', '').replace('"', '')
-            JUDUL = f"{clean_hook} 💡 #shorts #motivasi #renungan"
-            if len(JUDUL) > 100: JUDUL = JUDUL[:90] + " #shorts"
-            DESKRIPSI = f"{item['isi']}\n\n{item['cta']}\n\n#motivasi #renungan #inspirasi #shorts #mindset #psikologi #katabijak"
-            TAGS = ["motivasi", "quotes", "shorts", "renungan", "psikologi", "mindset"]
+            video_bg = os.path.join(BASE_DIR, f"football_bg_{i}.mp4")
+            audio_file = os.path.join(BASE_DIR, f"football_voice_{i}.mp3")
+            output_file = os.path.join(BASE_DIR, f"youtube_shorts_{i}.mp4")
             
-            download_pexels_video(item['pexels_query'], video_bg_file)
-            generate_ai_voice(suara_naskah, i, audio_file)
-            _, durasi = render_short_video(video_bg_file, audio_file, item, video_file, i)
+            download_pexels_video(item['keyword'], video_bg)
+            generate_voiceover(item['naskah'], audio_file)
+            render_shorts_video(video_bg, audio_file, output_file)
             
-            upload_to_youtube(video_file, JUDUL, DESKRIPSI, TAGS, i)
+            print(f"✅ Video {i} Berhasil Dirender: {output_file}\n")
             
-            mark_hook_as_used(item['hook'])
-            
-            # Pembersihan memori RAM secara paksa
-            gc.collect()
-            
-            if i < len(selected_batch):
-                print("⏳ Jeda 15 detik untuk keamanan API YouTube...\n")
-                time.sleep(15)
+            if i < len(batch):
+                time.sleep(10)
                 
         except Exception as e:
             print(f"❌ Kesalahan pada video {i}: {e}\n")
-            gc.collect()
+            
+    print("🎉 SEMUA VIDEO SHORTS SEPAK BOLA SELESAI DIBUAT! 🎉")
