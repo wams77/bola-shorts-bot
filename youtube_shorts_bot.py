@@ -95,11 +95,20 @@ def download_pexels_video(keyword, output_filename):
                 download_url = video_files[0]["link"]
                 
             print(f"   -> Mengunduh video Pexels...")
-            v_data = requests.get(download_url)
-            with open(output_filename, 'wb') as f:
-                f.write(v_data.content)
-            return output_filename
+            # Tambahkan User-Agent agar CDN Pexels tidak memblokir file
+            dl_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            v_data = requests.get(download_url, headers=dl_headers, stream=True)
             
+            with open(output_filename, 'wb') as f:
+                for chunk in v_data.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            
+            # Validasi Ukuran File Pexels (> 50KB)
+            if os.path.exists(output_filename) and os.path.getsize(output_filename) > 50000:
+                return output_filename
+            else:
+                raise Exception("File video Pexels yang diunduh korup atau 0 byte.")
+                
     raise Exception("Gagal mengunduh video dari Pexels API.")
 
 # ==========================================
@@ -113,6 +122,11 @@ async def _generate_audio_async(text, output_audio):
 def generate_voiceover(text, output_audio):
     print("🎙️ Merekam suara narator sepak bola...")
     asyncio.run(_generate_audio_async(text, output_audio))
+    
+    # Validasi Ukuran File Audio (> 1KB)
+    if not os.path.exists(output_audio) or os.path.getsize(output_audio) < 1000:
+        raise Exception("File audio gagal dibuat atau kosong!")
+        
     return output_audio
 
 # ==========================================
@@ -120,6 +134,13 @@ def generate_voiceover(text, output_audio):
 # ==========================================
 def render_shorts_video(video_bg_path, voice_path, output_video):
     print("🎬 Merakit video YouTube Shorts...")
+    
+    # Keamanan Tambahan: Periksa input sebelum MoviePy berjalan
+    if not os.path.exists(video_bg_path) or os.path.getsize(video_bg_path) == 0:
+        raise Exception("Video latar belakang hilang atau korup sebelum dirender.")
+    if not os.path.exists(voice_path) or os.path.getsize(voice_path) == 0:
+        raise Exception("File suara hilang atau korup sebelum dirender.")
+
     voice_clip = AudioFileClip(voice_path)
     target_duration = voice_clip.duration + 1.5
     
@@ -161,12 +182,39 @@ def render_shorts_video(video_bg_path, voice_path, output_video):
         final_audio = CompositeAudioClip([bgm_clip, voice_clip.with_start(0)])
         
     final_video = video_clip.with_audio(final_audio)
-    final_video.write_videofile(output_video, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
     
+    # Tulis video ke file
+    try:
+        final_video.write_videofile(
+            output_video, 
+            fps=24, 
+            codec="libx264", 
+            audio_codec="aac", 
+            preset="ultrafast",
+            threads=4
+        )
+    except Exception as e:
+        print(f"⚠️ Terjadi error saat FFmpeg menulis file: {e}")
+        
+    # Tutup object di memori secara aman
     try:
         final_video.close(); voice_clip.close(); video_clip.close()
-    except: pass
+        if os.path.exists(bgm_file) and 'bgm_clip' in locals():
+            bgm_clip.close()
+    except Exception: 
+        pass
     
+    time.sleep(3) # Beri waktu OS untuk menulis file ke disk
+    
+    # Validasi Hasil Akhir Render
+    file_size = os.path.getsize(output_video) if os.path.exists(output_video) else 0
+    print(f"📁 Ukuran file hasil render: {file_size} bytes")
+    
+    if file_size < 50000:
+        if os.path.exists(output_video):
+            os.remove(output_video)
+        raise Exception(f"File {output_video} gagal dibuat atau ukurannya korup/0 byte!")
+        
     return output_video
 
 # ==========================================
