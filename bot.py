@@ -19,6 +19,13 @@ from moviepy import (
 )
 from PIL import Image, ImageDraw, ImageFont
 
+# Pustaka Google YouTube API
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+
 # ==========================================
 # KONFIGURASI DIREKTORI & API
 # ==========================================
@@ -34,6 +41,9 @@ else:
 
 # Konfigurasi Pexels API
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
+
+# YouTube API Scope
+SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
 
 # ==========================================
 # 1. GROQ AI: GENERATOR NASKAH STOICISME
@@ -57,7 +67,7 @@ def generate_stoic_script(num_videos=3):
         try:
             chat_completion = groq_client.chat.completions.create(
                 messages=[
-                    {"role": "system", "content": "Anda adalah asisten AI filsuf Stoic. Jangan gunakan format markdown (seperti tanda bintang). Selalu ikuti struktur yang diminta persis."},
+                    {"role": "system", "content": "Anda adalah asisten AI filsuf Stoic. Jangan gunakan format markdown. Selalu ikuti struktur yang diminta."},
                     {"role": "user", "content": prompt}
                 ],
                 model="llama-3.1-8b-instant",
@@ -65,7 +75,6 @@ def generate_stoic_script(num_videos=3):
                 max_tokens=1500,
             )
             raw_text = chat_completion.choices[0].message.content
-            print(f"📄 Naskah mentah dari AI:\n{raw_text[:200]}...\n")
             break 
         except Exception as e:
             print(f"⚠️ Error Groq (Percobaan {attempt+1}/3): {e}")
@@ -84,7 +93,6 @@ def generate_stoic_script(num_videos=3):
         naskah = "Sadarilah hal ini, dan kamu akan menemukan kekuatan sejati. Stoicisme mengajarkan kita untuk fokus pada apa yang bisa kita kendalikan."
         keyword = "ancient statue cinematic"
         
-        # PARSER MEMBERSIHKAN FORMAT ASTERISK (*) JIKA ADA
         lines = chunk.strip().split("\n")
         has_content = False
         for line in lines:
@@ -148,7 +156,6 @@ def download_pexels_video(keyword, output_filename):
     except Exception as e:
         print(f"⚠️ Peringatan unduhan Pexels: {e}")
 
-    # FALLBACK STOIC: Video patung atau alam yang tenang
     print("⚠️ Menggunakan video cadangan (calm cinematic)...")
     fallback_url = "https://api.pexels.com/videos/search?query=calm+nature+fog+vertical&orientation=portrait&per_page=1"
     try:
@@ -184,13 +191,11 @@ def create_text_overlay(item, output_path, img_size=(1080, 1920)):
     font_quote = ImageFont.truetype(font_path, 75)
     font_footer = ImageFont.truetype(font_path, 45)
     
-    # 1. Judul Atas
     title_text = "🏛️ KUTIPAN STOIC 🏛️"
     try: w_title = draw.textlength(title_text, font=font_title)
     except: w_title = draw.textbbox((0, 0), title_text, font=font_title)[2]
     draw.text(((img_size[0] - w_title) // 2, 280), title_text, font=font_title, fill="#E0E0E0", stroke_width=2, stroke_fill="black")
 
-    # 2. Quote Utama (Tengah Layar)
     lines_quote = textwrap.wrap(f'"{item["quote"]}"', width=24)
     y_quote = 800
     for line in lines_quote:
@@ -200,7 +205,6 @@ def create_text_overlay(item, output_path, img_size=(1080, 1920)):
         draw.text((x_quote, y_quote), line, font=font_quote, fill="white", stroke_width=4, stroke_fill="black")
         y_quote += 95
 
-    # 3. Footer Bawah
     footer_text = "Fokus pada apa yang bisa kamu kendalikan."
     try: w_foot = draw.textlength(footer_text, font=font_footer)
     except: w_foot = draw.textbbox((0, 0), footer_text, font=font_footer)[2]
@@ -213,7 +217,6 @@ def create_text_overlay(item, output_path, img_size=(1080, 1920)):
 # 4. EDGE-TTS (SUARA NARATOR TENANG/BIJAK)
 # ==========================================
 async def _generate_audio_async(text, output_audio):
-    # Menggunakan rate -5% agar suara terdengar lebih lambat, tenang, dan berwibawa
     communicate = edge_tts.Communicate(text, "id-ID-ArdiNeural", rate="-5%")
     await communicate.save(output_audio)
 
@@ -235,7 +238,7 @@ def render_shorts_video(video_bg_path, voice_path, item, output_video, index):
         raise Exception("Video latar belakang hilang atau korup.")
 
     voice_clip = AudioFileClip(voice_path)
-    target_duration = voice_clip.duration + 2.0  # Tambahan waktu jeda untuk peresapan makna
+    target_duration = voice_clip.duration + 2.0 
     
     video_clip = VideoFileClip(video_bg_path)
     
@@ -245,7 +248,6 @@ def render_shorts_video(video_bg_path, voice_path, item, output_video, index):
         
     video_clip = video_clip.subclipped(0, target_duration)
     
-    # Resize & Crop Vertikal 1080x1920
     w, h = video_clip.size
     target_ratio = 9 / 16
     current_ratio = w / h
@@ -261,15 +263,12 @@ def render_shorts_video(video_bg_path, voice_path, item, output_video, index):
         
     video_clip = video_clip.resized((1080, 1920))
     
-    # Tambahkan filter gelap agar video terkesan lebih sinematik dan tulisan mudah dibaca
     dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.5).with_duration(target_duration)
     
-    # Teks Overlay Gambar
     txt_img_path = os.path.join(BASE_DIR, f"overlay_temp_{index}.png")
     create_text_overlay(item, txt_img_path)
     txt_clip = ImageClip(txt_img_path).with_duration(target_duration)
     
-    # Menggabungkan Visual dan Audio
     final_video = CompositeVideoClip([video_clip, dark_overlay, txt_clip], size=(1080, 1920)).with_audio(voice_clip)
     
     try:
@@ -284,7 +283,6 @@ def render_shorts_video(video_bg_path, voice_path, item, output_video, index):
     except Exception as e:
         print(f"⚠️ Terjadi error FFmpeg: {e}")
         
-    # Pembersihan Memori
     try:
         final_video.close(); voice_clip.close(); video_clip.close()
         if os.path.exists(txt_img_path): os.remove(txt_img_path)
@@ -298,6 +296,56 @@ def render_shorts_video(video_bg_path, voice_path, item, output_video, index):
         raise Exception(f"File {output_video} korup/0 byte!")
         
     return output_video
+
+# ==========================================
+# 6. YOUTUBE API: UPLOAD OTOMATIS
+# ==========================================
+def upload_to_youtube(video_path, title, description):
+    print(f"🚀 Mengunggah video ke YouTube: {title}")
+    
+    creds = None
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+        
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file('client_secret.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+            
+        with open('token.json', 'w') as token:
+            token.write(creds.to_json())
+
+    youtube = build('youtube', 'v3', credentials=creds)
+
+    body = {
+        'snippet': {
+            'title': title,
+            'description': description,
+            'tags': ['stoic', 'filsafat', 'motivasi', 'shorts'],
+            'categoryId': '27' 
+        },
+        'status': {
+            'privacyStatus': 'public',
+            'selfDeclaredMadeForKids': False
+        }
+    }
+
+    insert_request = youtube.videos().insert(
+        part=','.join(body.keys()),
+        body=body,
+        media_body=MediaFileUpload(video_path, chunksize=-1, resumable=True)
+    )
+
+    print("⏳ Sedang mengunggah ke server YouTube...")
+    response = None
+    while response is None:
+        status, response = insert_request.next_chunk()
+        if status:
+            print(f"   -> Progress: {int(status.progress() * 100)}%")
+
+    print(f"🎉 BERHASIL DIUNGGAH! Tautan: https://www.youtube.com/watch?v={response['id']}\n")
 
 # ==========================================
 # EKSEKUTOR UTAMA
@@ -320,7 +368,9 @@ if __name__ == "__main__":
             generate_voiceover(item['naskah'], audio_file)
             render_shorts_video(video_bg, audio_file, item, output_file, i)
             
-            print(f"✅ Video {i} Siap Diunggah ke YouTube: {output_file}\n")
+            # Unggah ke YouTube secara otomatis
+            deskripsi = f"{item['quote']}\n\n#stoic #filsafat #motivasi #shorts"
+            upload_to_youtube(output_file, item['judul'], deskripsi)
             
             if i < len(batch):
                 time.sleep(10)
@@ -328,4 +378,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"❌ Kesalahan pada video {i}: {e}\n")
             
-    print("🎉 SEMUA VIDEO SHORTS STOICISME SELESAI DIBUAT! 🎉")
+    print("🎉 SEMUA VIDEO SHORTS STOICISME SELESAI DIBUAT & DIUNGGAH! 🎉")
