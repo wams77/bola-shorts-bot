@@ -19,11 +19,10 @@ from moviepy import (
 )
 from PIL import Image, ImageDraw, ImageFont
 
-# Pustaka Google YouTube API
+# Pustaka Google YouTube API & OAuth
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
 # ==========================================
@@ -31,18 +30,22 @@ from google.auth.transport.requests import Request
 # ==========================================
 BASE_DIR = os.path.abspath(os.getcwd())
 
-# Konfigurasi Groq API
+# Konfigurasi Groq API dari Secret
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 if GROQ_API_KEY:
     groq_client = Groq(api_key=GROQ_API_KEY)
 else:
-    print("⚠️ PERINGATAN: GROQ_API_KEY belum dipasang!")
+    print("⚠️ PERINGATAN: GROQ_API_KEY belum dipasang di Secrets!")
     groq_client = None
 
-# Konfigurasi Pexels API
+# Konfigurasi Pexels API dari Secret
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
 
-# YouTube API Scope
+# Konfigurasi YouTube OAuth langsung dari Secrets Anda
+YOUTUBE_CLIENT_ID = os.environ.get("YOUTUBE_CLIENT_ID")
+YOUTUBE_CLIENT_SECRET = os.environ.get("YOUTUBE_CLIENT_SECRET")
+YOUTUBE_REFRESH_TOKEN = os.environ.get("YOUTUBE_REFRESH_TOKEN")
+
 SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
 
 # ==========================================
@@ -298,24 +301,22 @@ def render_shorts_video(video_bg_path, voice_path, item, output_video, index):
     return output_video
 
 # ==========================================
-# 6. YOUTUBE API: UPLOAD OTOMATIS
+# 6. YOUTUBE API: UPLOAD MENGGUNAKAN GITHUB SECRETS
 # ==========================================
 def upload_to_youtube(video_path, title, description):
     print(f"🚀 Mengunggah video ke YouTube: {title}")
     
-    creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-        
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file('client_secret.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-            
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
+    # Merakit objek kredensial OAuth langsung dari Variabel Environment GitHub Secrets
+    creds = Credentials(
+        None,
+        refresh_token=YOUTUBE_REFRESH_TOKEN,
+        client_id=YOUTUBE_CLIENT_ID,
+        client_secret=YOUTUBE_CLIENT_SECRET,
+        token_uri="https://oauth2.googleapis.com/token"
+    )
+
+    # Memperbarui token akses secara otomatis sebelum mengunggah
+    creds.refresh(Request())
 
     youtube = build('youtube', 'v3', credentials=creds)
 
@@ -368,7 +369,7 @@ if __name__ == "__main__":
             generate_voiceover(item['naskah'], audio_file)
             render_shorts_video(video_bg, audio_file, item, output_file, i)
             
-            # Unggah ke YouTube secara otomatis
+            # Mengunggah video otomatis menggunakan Secrets
             deskripsi = f"{item['quote']}\n\n#stoic #filsafat #motivasi #shorts"
             upload_to_youtube(output_file, item['judul'], deskripsi)
             
