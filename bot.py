@@ -273,7 +273,7 @@ def render_shorts_video(video_bg_path, voice_path, item, output_video, index):
         n_loops = int(target_duration // video_clip.duration) + 1
         video_clip = concatenate_videoclips([video_clip] * n_loops)
         
-    # PERBAIKAN DI SINI: Menggunakan subclip, bukan subclipped
+    # PERBAIKAN: subclip untuk MoviePy 1.0.3
     video_clip = video_clip.subclip(0, target_duration)
     
     w, h = video_clip.size
@@ -283,21 +283,28 @@ def render_shorts_video(video_bg_path, voice_path, item, output_video, index):
     if current_ratio > target_ratio:
         new_w = int(h * target_ratio)
         x_center = (w - new_w) / 2
-        video_clip = video_clip.cropped(x1=x_center, y1=0, x2=x_center + new_w, y2=h)
+        # PERBAIKAN: crop (bukan cropped)
+        video_clip = video_clip.crop(x1=x_center, y1=0, x2=x_center + new_w, y2=h)
     else:
         new_h = int(w / target_ratio)
         y_center = (h - new_h) / 2
-        video_clip = video_clip.cropped(x1=0, y1=y_center, x2=w, y2=y_center + new_h)
+        # PERBAIKAN: crop (bukan cropped)
+        video_clip = video_clip.crop(x1=0, y1=y_center, x2=w, y2=y_center + new_h)
         
-    video_clip = video_clip.resized((1080, 1920))
+    # PERBAIKAN: resize (bukan resized)
+    video_clip = video_clip.resize((1080, 1920))
     
-    dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.5).with_duration(target_duration)
+    # PERBAIKAN: set_opacity & set_duration (bukan with_opacity / with_duration)
+    dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).set_opacity(0.5).set_duration(target_duration)
     
     txt_img_path = os.path.join(BASE_DIR, f"overlay_temp_{index}.png")
     create_text_overlay(item, txt_img_path)
-    txt_clip = ImageClip(txt_img_path).with_duration(target_duration)
     
-    final_video = CompositeVideoClip([video_clip, dark_overlay, txt_clip], size=(1080, 1920)).with_audio(voice_clip)
+    # PERBAIKAN: set_duration (bukan with_duration)
+    txt_clip = ImageClip(txt_img_path).set_duration(target_duration)
+    
+    # PERBAIKAN: set_audio (bukan with_audio)
+    final_video = CompositeVideoClip([video_clip, dark_overlay, txt_clip], size=(1080, 1920)).set_audio(voice_clip)
     
     try:
         final_video.write_videofile(
