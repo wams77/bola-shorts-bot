@@ -30,6 +30,19 @@ from google.auth.transport.requests import Request
 # ==========================================
 BASE_DIR = os.path.abspath(os.getcwd())
 
+# Menyesuaikan dengan file history.txt yang sudah ada di repository Anda
+HISTORY_FILE = "history.txt"
+
+def get_used_quotes():
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+        return [line.strip() for line in f.readlines() if line.strip()]
+
+def mark_quote_as_used(quote_text):
+    with open(HISTORY_FILE, 'a', encoding='utf-8') as f:
+        f.write(f"{quote_text}\n")
+
 # Konfigurasi Groq API dari Secret
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 if GROQ_API_KEY:
@@ -41,7 +54,7 @@ else:
 # Konfigurasi Pexels API dari Secret
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
 
-# Konfigurasi YouTube OAuth langsung dari Secrets Anda
+# Konfigurasi YouTube OAuth langsung dari Secrets
 YOUTUBE_CLIENT_ID = os.environ.get("YOUTUBE_CLIENT_ID")
 YOUTUBE_CLIENT_SECRET = os.environ.get("YOUTUBE_CLIENT_SECRET")
 YOUTUBE_REFRESH_TOKEN = os.environ.get("YOUTUBE_REFRESH_TOKEN")
@@ -49,18 +62,26 @@ YOUTUBE_REFRESH_TOKEN = os.environ.get("YOUTUBE_REFRESH_TOKEN")
 SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
 
 # ==========================================
-# 1. GROQ AI: GENERATOR NASKAH STOICISME
+# 1. GROQ AI: GENERATOR NASKAH ANTI-DUPLIKASI
 # ==========================================
 def generate_stoic_script(num_videos=3):
-    print(f"🏛️ Meminta Groq Llama-3 meracik {num_videos} naskah YouTube Shorts Stoicisme...")
+    print(f"🏛️ Meminta Groq Llama-3 meracik {num_videos} naskah YouTube Shorts Stoicisme baru...")
+    
+    used_quotes = get_used_quotes()
+    history_context = "\n".join(used_quotes[-40:]) if used_quotes else "(Belum ada riwayat)"
     
     prompt = f"""
     Bertindaklah sebagai konten kreator YouTube Shorts yang fokus pada filsafat Stoicisme (Stoa) dan kebijaksanaan hidup.
-    Buatlah {num_videos} naskah video pendek (durasi 30-40 detik) yang berisi ketenangan batin, pengendalian diri, dan kebijaksanaan dari para filsuf Stoic (seperti Marcus Aurelius, Seneca, atau Epictetus).
+    Buatlah {num_videos} naskah video pendek (durasi 30-40 detik) yang berisi ketenangan batin, pengendalian diri, dan kebijaksanaan dari para filsuf Stoic (Marcus Aurelius, Seneca, Epictetus).
+    
+    ATURAN MUTLAK ANTI-DUPLIKASI:
+    Jangan gunakan kutipan atau topik yang sudah ada di dalam daftar riwayat berikut ini:
+    {history_context}
+    
     Gunakan pemisah '---' antar naskah. Format persis seperti ini:
     
     JUDUL: [Judul video yang tenang dan memancing rasa penasaran, max 60 karakter]
-    QUOTE: [Satu kalimat kutipan asli dari filsuf Stoic yang paling kuat dan mendalam]
+    QUOTE: [Satu kalimat kutipan asli dari filsuf Stoic yang unik dan belum pernah dipakai]
     NASKAH: [Naskah suara narator yang menenangkan, bijak, dan mendalam. Tanpa jeda waktu, langsung isi naskah narasi]
     PENCARIAN_VIDEO: [Kata kunci bahasa Inggris untuk video Pexels bertema stoic, misal: "ancient statue", "calm ocean waves", "man thinking nature", "roman ruins", "cinematic fog calm"]
     """
@@ -70,7 +91,7 @@ def generate_stoic_script(num_videos=3):
         try:
             chat_completion = groq_client.chat.completions.create(
                 messages=[
-                    {"role": "system", "content": "Anda adalah asisten AI filsuf Stoic. Jangan gunakan format markdown. Selalu ikuti struktur yang diminta."},
+                    {"role": "system", "content": "Anda adalah asisten AI filsuf Stoic. Jangan gunakan format markdown. Selalu ikuti struktur yang diminta dan patuhi aturan anti-duplikasi."},
                     {"role": "user", "content": prompt}
                 ],
                 model="llama-3.1-8b-instant",
@@ -113,6 +134,10 @@ def generate_stoic_script(num_videos=3):
                 keyword = line_clean[16:].strip()
                 
         if not has_content: continue
+        
+        if quote in used_quotes:
+            print(f"⚠️ Kutipan duplikat terdeteksi oleh sistem, melewati...")
+            continue
                 
         batch.append({
             "id": f"STOIC_{int(time.time())}_{len(batch)}",
@@ -122,7 +147,7 @@ def generate_stoic_script(num_videos=3):
             "keyword": keyword
         })
         
-    print(f"✅ Berhasil meracik {len(batch)} Naskah Stoicisme!")
+    print(f"✅ Berhasil meracik {len(batch)} Naskah Stoicisme unik yang bebas duplikat!")
     return batch
 
 # ==========================================
@@ -306,7 +331,6 @@ def render_shorts_video(video_bg_path, voice_path, item, output_video, index):
 def upload_to_youtube(video_path, title, description):
     print(f"🚀 Mengunggah video ke YouTube: {title}")
     
-    # Merakit objek kredensial OAuth langsung dari Variabel Environment GitHub Secrets
     creds = Credentials(
         None,
         refresh_token=YOUTUBE_REFRESH_TOKEN,
@@ -315,7 +339,6 @@ def upload_to_youtube(video_path, title, description):
         token_uri="https://oauth2.googleapis.com/token"
     )
 
-    # Memperbarui token akses secara otomatis sebelum mengunggah
     creds.refresh(Request())
 
     youtube = build('youtube', 'v3', credentials=creds)
@@ -369,9 +392,12 @@ if __name__ == "__main__":
             generate_voiceover(item['naskah'], audio_file)
             render_shorts_video(video_bg, audio_file, item, output_file, i)
             
-            # Mengunggah video otomatis menggunakan Secrets
+            # Mengunggah video otomatis
             deskripsi = f"{item['quote']}\n\n#stoic #filsafat #motivasi #shorts"
             upload_to_youtube(output_file, item['judul'], deskripsi)
+            
+            # Tandai kutipan ini sebagai sudah digunakan di history.txt
+            mark_quote_as_used(item['quote'])
             
             if i < len(batch):
                 time.sleep(10)
