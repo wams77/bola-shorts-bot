@@ -273,7 +273,8 @@ def render_shorts_video(video_bg_path, voice_path, item, output_video, index):
         n_loops = int(target_duration // video_clip.duration) + 1
         video_clip = concatenate_videoclips([video_clip] * n_loops)
         
-    video_clip = video_clip.subclipped(0, target_duration)
+    # PERBAIKAN DI SINI: Menggunakan subclip, bukan subclipped
+    video_clip = video_clip.subclip(0, target_duration)
     
     w, h = video_clip.size
     target_ratio = 9 / 16
