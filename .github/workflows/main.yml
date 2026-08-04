@@ -2,7 +2,11 @@ name: Auto Motivasi Shorts Bot
 
 on:
   schedule:
-    - cron: '30 9 * * *' # Berjalan otomatis pukul 16:30 WIB setiap hari
+    # Berjalan 3 kali sehari: 
+    # 1. Jam 07:00 WITA (23:00 UTC)
+    # 2. Jam 12:00 WITA (04:00 UTC)
+    # 3. Jam 18:00 WITA (10:00 UTC)
+    - cron: '0 23,4,10 * * *'
   workflow_dispatch: # Memunculkan tombol "Run workflow" untuk eksekusi manual
 
 # Memberikan izin kepada bot untuk menulis/mengubah file history di repositori
@@ -32,7 +36,8 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install edge-tts moviepy==1.0.3 requests google-api-python-client google-auth-oauthlib google-auth-httplib2 groq pillow
+          # Mematok moviepy ke versi 1.0.3 agar kompatibel dengan modul import lama
+          pip install moviepy==1.0.3 edge-tts requests google-api-python-client google-auth-oauthlib google-auth-httplib2 groq pillow
 
       - name: Eksekusi Bot Produksi
         env:
@@ -50,7 +55,7 @@ jobs:
           git config --global user.name 'Bot Editor AI'
           git config --global user.email 'bot@actions.github.com'
           
-          # Memastikan file history.txt ada
+          # Memastikan file history.txt ada di repository
           touch history.txt 
           
           git add history.txt
