@@ -7,7 +7,7 @@ import asyncio
 import edge_tts
 import textwrap
 from groq import Groq
-from moviepy import (
+from moviepy.editor import (
     AudioFileClip, 
     CompositeAudioClip, 
     CompositeVideoClip, 
@@ -30,7 +30,6 @@ from google.auth.transport.requests import Request
 # ==========================================
 BASE_DIR = os.path.abspath(os.getcwd())
 
-# Menyesuaikan dengan file history.txt yang sudah ada di repository Anda
 HISTORY_FILE = "history.txt"
 
 def get_used_quotes():
