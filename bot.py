@@ -69,6 +69,7 @@ def generate_stoic_script(num_videos=3):
     used_quotes = get_used_quotes()
     history_context = "\n".join(used_quotes[-40:]) if used_quotes else "(Belum ada riwayat)"
     
+    # Prompt diperbarui untuk meminta nama filsuf
     prompt = f"""
     Bertindaklah sebagai konten kreator YouTube Shorts yang fokus pada filsafat Stoicisme (Stoa) dan kebijaksanaan hidup.
     Buatlah {num_videos} naskah video pendek (durasi 30-40 detik) yang berisi ketenangan batin, pengendalian diri, dan kebijaksanaan dari para filsuf Stoic (Marcus Aurelius, Seneca, Epictetus).
@@ -81,6 +82,7 @@ def generate_stoic_script(num_videos=3):
     
     JUDUL: [Judul video yang tenang dan memancing rasa penasaran, max 60 karakter]
     QUOTE: [Satu kalimat kutipan asli dari filsuf Stoic yang unik dan belum pernah dipakai]
+    FILSUF: [Nama filsuf Stoic yang mengatakan kutipan tersebut, misal: Marcus Aurelius]
     NASKAH: [Naskah suara narator yang menenangkan, bijak, dan mendalam. Tanpa jeda waktu, langsung isi naskah narasi]
     PENCARIAN_VIDEO: [Kata kunci bahasa Inggris untuk video Pexels bertema stoic, misal: "ancient statue", "calm ocean waves", "man thinking nature", "roman ruins", "cinematic fog calm"]
     """
@@ -113,6 +115,7 @@ def generate_stoic_script(num_videos=3):
         
         ref_judul = "Kebijaksanaan Stoic"
         quote = "Kamu memiliki kendali atas pikiranmu, bukan kejadian di luar sana."
+        filsuf = "Epictetus"
         naskah = "Sadarilah hal ini, dan kamu akan menemukan kekuatan sejati. Stoicisme mengajarkan kita untuk fokus pada apa yang bisa kita kendalikan."
         keyword = "ancient statue cinematic"
         
@@ -127,6 +130,8 @@ def generate_stoic_script(num_videos=3):
                 ref_judul = line_clean[6:].strip()
             elif line_clean.upper().startswith("QUOTE:"):
                 quote = line_clean[6:].strip()
+            elif line_clean.upper().startswith("FILSUF:"):
+                filsuf = line_clean[7:].strip()
             elif line_clean.upper().startswith("NASKAH:"):
                 naskah = line_clean[7:].strip()
             elif line_clean.upper().startswith("PENCARIAN_VIDEO:"):
@@ -142,6 +147,7 @@ def generate_stoic_script(num_videos=3):
             "id": f"STOIC_{int(time.time())}_{len(batch)}",
             "judul": ref_judul,
             "quote": quote,
+            "filsuf": filsuf,
             "naskah": naskah,
             "keyword": keyword
         })
@@ -216,6 +222,7 @@ def create_text_overlay(item, output_path, img_size=(1080, 1920)):
     font_path = get_custom_font()
     font_title = ImageFont.truetype(font_path, 55)
     font_quote = ImageFont.truetype(font_path, 75)
+    font_author = ImageFont.truetype(font_path, 60) # Font untuk nama filsuf
     font_footer = ImageFont.truetype(font_path, 45)
     
     title_text = "🏛️ KUTIPAN STOIC 🏛️"
@@ -223,6 +230,7 @@ def create_text_overlay(item, output_path, img_size=(1080, 1920)):
     except: w_title = draw.textbbox((0, 0), title_text, font=font_title)[2]
     draw.text(((img_size[0] - w_title) // 2, 280), title_text, font=font_title, fill="#E0E0E0", stroke_width=2, stroke_fill="black")
 
+    # Render Kutipan
     lines_quote = textwrap.wrap(f'"{item["quote"]}"', width=24)
     y_quote = 800
     for line in lines_quote:
@@ -232,6 +240,15 @@ def create_text_overlay(item, output_path, img_size=(1080, 1920)):
         draw.text((x_quote, y_quote), line, font=font_quote, fill="white", stroke_width=4, stroke_fill="black")
         y_quote += 95
 
+    # Render Nama Filsuf (Tepat di bawah kutipan)
+    author_text = f"- {item['filsuf']} -"
+    try: w_author = draw.textlength(author_text, font=font_author)
+    except: w_author = draw.textbbox((0, 0), author_text, font=font_author)[2]
+    x_author = (img_size[0] - w_author) // 2
+    y_author = y_quote + 40 # Jarak antar teks
+    draw.text((x_author, y_author), author_text, font=font_author, fill="#FFD700", stroke_width=3, stroke_fill="black") # Warna Emas / Kuning pudar
+
+    # Render Footer
     footer_text = "Fokus pada apa yang bisa kamu kendalikan."
     try: w_foot = draw.textlength(footer_text, font=font_footer)
     except: w_foot = draw.textbbox((0, 0), footer_text, font=font_footer)[2]
@@ -273,7 +290,6 @@ def render_shorts_video(video_bg_path, voice_path, item, output_video, index):
         n_loops = int(target_duration // video_clip.duration) + 1
         video_clip = concatenate_videoclips([video_clip] * n_loops)
         
-    # PERBAIKAN: subclip untuk MoviePy 1.0.3
     video_clip = video_clip.subclip(0, target_duration)
     
     w, h = video_clip.size
@@ -283,27 +299,21 @@ def render_shorts_video(video_bg_path, voice_path, item, output_video, index):
     if current_ratio > target_ratio:
         new_w = int(h * target_ratio)
         x_center = (w - new_w) / 2
-        # PERBAIKAN: crop (bukan cropped)
         video_clip = video_clip.crop(x1=x_center, y1=0, x2=x_center + new_w, y2=h)
     else:
         new_h = int(w / target_ratio)
         y_center = (h - new_h) / 2
-        # PERBAIKAN: crop (bukan cropped)
         video_clip = video_clip.crop(x1=0, y1=y_center, x2=w, y2=y_center + new_h)
         
-    # PERBAIKAN: resize (bukan resized)
     video_clip = video_clip.resize((1080, 1920))
     
-    # PERBAIKAN: set_opacity & set_duration (bukan with_opacity / with_duration)
     dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).set_opacity(0.5).set_duration(target_duration)
     
     txt_img_path = os.path.join(BASE_DIR, f"overlay_temp_{index}.png")
     create_text_overlay(item, txt_img_path)
     
-    # PERBAIKAN: set_duration (bukan with_duration)
     txt_clip = ImageClip(txt_img_path).set_duration(target_duration)
     
-    # PERBAIKAN: set_audio (bukan with_audio)
     final_video = CompositeVideoClip([video_clip, dark_overlay, txt_clip], size=(1080, 1920)).set_audio(voice_clip)
     
     try:
@@ -354,7 +364,7 @@ def upload_to_youtube(video_path, title, description):
         'snippet': {
             'title': title,
             'description': description,
-            'tags': ['stoic', 'filsafat', 'motivasi', 'shorts'],
+            'tags': ['stoic', 'filsafat', 'motivasi', 'shorts', 'marcus aurelius', 'seneca'],
             'categoryId': '27' 
         },
         'status': {
@@ -399,8 +409,8 @@ if __name__ == "__main__":
             generate_voiceover(item['naskah'], audio_file)
             render_shorts_video(video_bg, audio_file, item, output_file, i)
             
-            # Mengunggah video otomatis
-            deskripsi = f"{item['quote']}\n\n#stoic #filsafat #motivasi #shorts"
+            # Mengunggah video otomatis (Menyertakan nama filsuf di deskripsi)
+            deskripsi = f'"{item["quote"]}"\n- {item["filsuf"]}\n\n#stoic #filsafat #motivasi #shorts'
             upload_to_youtube(output_file, item['judul'], deskripsi)
             
             # Tandai kutipan ini sebagai sudah digunakan di history.txt
