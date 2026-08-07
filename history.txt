@@ -25,3 +25,4 @@ V007
 "Pikiran kita adalah pembuat kebahagiaan atau kekhawatiran."
 "Keterpurukan bukanlah suatu keadaan, tetapi suatu kesempatan untuk mengembangkan kekuatan."
 "Kegagalan bukanlah akhir dari kehidupan, tetapi kesempatan untuk mengembangkan kekuatan diri sendiri."
+"Kegagalan bukanlah akhir dari kehidupan, tetapi kesempatan untuk belajar dan mengembangkan kekuatan diri."
