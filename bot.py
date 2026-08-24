@@ -64,7 +64,7 @@ SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
 # 1. GROQ AI: GENERATOR NASKAH ANTI-DUPLIKASI
 # ==========================================
 def generate_stoic_script(num_videos=3):
-    print(f"🏛️ Meminta Groq Llama-3 meracik {num_videos} naskah YouTube Shorts Stoicisme baru...")
+    print(f"🕊️ Meminta Groq (GPT-OSS 120B) meracik {num_videos} naskah YouTube Shorts Stoicisme baru...")
     
     used_quotes = get_used_quotes()
     history_context = "\n".join(used_quotes[-40:]) if used_quotes else "(Belum ada riwayat)"
@@ -95,7 +95,7 @@ def generate_stoic_script(num_videos=3):
                     {"role": "system", "content": "Anda adalah asisten AI filsuf Stoic. Jangan gunakan format markdown. Selalu ikuti struktur yang diminta dan patuhi aturan anti-duplikasi."},
                     {"role": "user", "content": prompt}
                 ],
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-120b",
                 temperature=0.7,
                 max_tokens=1500,
             )
